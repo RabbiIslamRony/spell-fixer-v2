@@ -13,7 +13,9 @@
   const INLINE_TEXT_LIMIT = 1400;
   const CONTENT_DEFAULT_SETTINGS = {
     extensionEnabled: true,
-    settingsVersion: 4
+    siteAccessMode: "all",
+    siteAccessList: "",
+    settingsVersion: 5
   };
 
   const state = {
@@ -23,6 +25,9 @@
     busy: false,
     inlineBusy: false,
     extensionEnabled: true,
+    siteAccessMode: "all",
+    siteAccessList: "",
+    siteAllowed: true,
     button: null,
     panel: null,
     resultNode: null,
@@ -31,6 +36,9 @@
     overlayInner: null,
     bubble: null,
     tray: null,
+    notice: null,
+    lastNoticeAt: 0,
+    lastNoticeMessage: "",
     inlineIssues: [],
     inlineText: "",
     lastCheckedText: "",
@@ -57,7 +65,8 @@
     state.overlay = createOverlay();
     state.bubble = createBubble();
     state.tray = createTray();
-    document.documentElement.append(state.overlay, state.bubble, state.tray, state.button, state.panel);
+    state.notice = createNotice();
+    document.documentElement.append(state.overlay, state.bubble, state.tray, state.notice, state.button, state.panel);
 
     document.addEventListener("focusin", handleFocusIn, true);
     document.addEventListener("focusout", handleFocusOut, true);
@@ -152,6 +161,14 @@
     return tray;
   }
 
+  function createNotice() {
+    const notice = document.createElement("div");
+    notice.className = "shga-page-notice";
+    notice.setAttribute("role", "status");
+    notice.setAttribute("aria-live", "polite");
+    return notice;
+  }
+
   function loadContentSettings() {
     chrome.storage.sync.get(CONTENT_DEFAULT_SETTINGS, applyContentSettings);
     chrome.storage.onChanged.addListener((changes, areaName) => {
@@ -159,7 +176,12 @@
         return;
       }
 
-      if (changes.extensionEnabled || changes.settingsVersion) {
+      if (
+        changes.extensionEnabled ||
+        changes.siteAccessMode ||
+        changes.siteAccessList ||
+        changes.settingsVersion
+      ) {
         chrome.storage.sync.get(CONTENT_DEFAULT_SETTINGS, applyContentSettings);
       }
     });
@@ -168,8 +190,11 @@
   function applyContentSettings(settings) {
     const nextEnabled = settings.extensionEnabled !== false;
     state.extensionEnabled = nextEnabled;
+    state.siteAccessMode = normalizeSiteAccessMode(settings.siteAccessMode);
+    state.siteAccessList = settings.siteAccessList || "";
+    state.siteAllowed = isCurrentSiteAllowed();
 
-    if (!nextEnabled) {
+    if (!assistantActive()) {
       pauseAssistantUi();
       return;
     }
@@ -187,6 +212,7 @@
     state.pendingInlineCheck = false;
     hideButton();
     clearInlineIssues();
+    hidePageNotice();
     closePanel();
   }
 
@@ -201,7 +227,7 @@
       cancelBadgePlacement();
       clearInlineIssues();
     }
-    if (!state.extensionEnabled) {
+    if (!assistantActive()) {
       pauseAssistantUi();
       return;
     }
@@ -238,6 +264,12 @@
       pauseAssistantUi();
       return;
     }
+    if (!state.siteAllowed) {
+      clearInlineIssues();
+      cancelBadgePlacement();
+      showPageNotice("Suggestions are disabled for this site.");
+      return;
+    }
     if (!editorHasText(editor)) {
       clearInlineIssues();
       cancelBadgePlacement();
@@ -263,6 +295,7 @@
 
     if (!state.editor || !isInsideEditor(event.target, state.editor)) {
       cancelBadgePlacement();
+      hidePageNotice();
     }
 
     hideBubble();
@@ -270,7 +303,7 @@
   }
 
   function handleEditorClick(event) {
-    if (!state.extensionEnabled) {
+    if (!assistantActive()) {
       return;
     }
     if (!state.editor || !isInsideEditor(event.target, state.editor)) {
@@ -281,7 +314,7 @@
   }
 
   function handleKeyUp(event) {
-    if (!state.extensionEnabled) {
+    if (!assistantActive()) {
       return;
     }
     if (!state.editor || !isInsideEditor(event.target, state.editor)) {
@@ -294,7 +327,7 @@
   }
 
   function handleSelectionChange() {
-    if (!state.extensionEnabled) {
+    if (!assistantActive()) {
       return;
     }
     const editor = findEditor(document.activeElement);
@@ -307,7 +340,7 @@
   }
 
   function handleScroll(event) {
-    if (!state.extensionEnabled) {
+    if (!assistantActive()) {
       return;
     }
     if (event.target === state.editor) {
@@ -318,7 +351,7 @@
   }
 
   function handleShortcut(event) {
-    if (!state.extensionEnabled) {
+    if (!assistantActive()) {
       return;
     }
     if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "g") {
@@ -370,6 +403,40 @@
     );
   }
 
+  function assistantActive() {
+    return state.extensionEnabled && state.siteAllowed;
+  }
+
+  function normalizeSiteAccessMode(value) {
+    return ["all", "blocklist", "allowlist"].includes(value) ? value : "all";
+  }
+
+  function isCurrentSiteAllowed() {
+    if (state.siteAccessMode === "all") {
+      return true;
+    }
+
+    const hostname = location.hostname.replace(/^www\./, "").toLowerCase();
+    if (!hostname) {
+      return state.siteAccessMode !== "allowlist";
+    }
+
+    const entries = parseSiteList(state.siteAccessList);
+    if (!entries.length) {
+      return state.siteAccessMode !== "allowlist";
+    }
+
+    const matched = entries.some((entry) => hostname === entry || hostname.endsWith(`.${entry}`));
+    return state.siteAccessMode === "allowlist" ? matched : !matched;
+  }
+
+  function parseSiteList(value) {
+    return String(value || "")
+      .split(/[\n,]+/)
+      .map((item) => item.trim().replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0].toLowerCase())
+      .filter(Boolean);
+  }
+
   function isTextInput(node) {
     if (!(node instanceof HTMLInputElement) && !(node instanceof HTMLTextAreaElement)) {
       return false;
@@ -399,6 +466,7 @@
   function placeButton() {
     if (
       !state.extensionEnabled ||
+      !state.siteAllowed ||
       !state.badgeReady ||
       !state.editor ||
       !document.documentElement.contains(state.editor) ||
@@ -443,7 +511,7 @@
 
   function scheduleBadgePlacement() {
     cancelBadgePlacement();
-    if (!state.extensionEnabled || !state.editor || !editorHasText(state.editor)) {
+    if (!assistantActive() || !state.editor || !editorHasText(state.editor)) {
       return;
     }
 
@@ -452,6 +520,7 @@
       state.badgeTimer = null;
       if (
         !state.extensionEnabled ||
+        !state.siteAllowed ||
         state.editor !== editor ||
         !editorHasText(editor) ||
         !isEditorActive(editor)
@@ -473,7 +542,7 @@
   }
 
   function scheduleInlineCheck() {
-    if (!state.extensionEnabled || !editorHasText(state.editor)) {
+    if (!assistantActive() || !editorHasText(state.editor)) {
       clearInlineIssues();
       cancelBadgePlacement();
       return;
@@ -483,7 +552,7 @@
   }
 
   async function runCheck(mode, options = {}) {
-    if (!state.extensionEnabled) {
+    if (!assistantActive()) {
       return;
     }
     const inline = Boolean(options.inline);
@@ -570,10 +639,12 @@
         setStatus("Ready.");
       }
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       if (inline) {
         clearInlineIssues();
+        showPageNotice(normalizePageError(message));
       } else {
-        renderError(error instanceof Error ? error.message : String(error));
+        renderError(message);
         setStatus("Could not check the text.");
       }
     } finally {
@@ -836,8 +907,61 @@
     state.tray.textContent = "";
   }
 
+  function showPageNotice(message) {
+    if (!message || !state.editor) {
+      return;
+    }
+
+    const now = Date.now();
+    if (state.lastNoticeMessage === message && now - state.lastNoticeAt < 5000) {
+      return;
+    }
+
+    state.lastNoticeMessage = message;
+    state.lastNoticeAt = now;
+    state.notice.textContent = message;
+    placePageNotice();
+    state.notice.dataset.open = "true";
+  }
+
+  function hidePageNotice() {
+    state.notice.dataset.open = "false";
+  }
+
+  function placePageNotice() {
+    if (!state.editor) {
+      hidePageNotice();
+      return;
+    }
+
+    const rect = state.editor.getBoundingClientRect();
+    const left = Math.min(Math.max(rect.left, 8), window.innerWidth - 326);
+    const top = Math.min(Math.max(rect.bottom + 8, 8), window.innerHeight - 74);
+    state.notice.style.left = `${left}px`;
+    state.notice.style.top = `${top}px`;
+  }
+
+  function normalizePageError(message) {
+    if (/api key|401|403|unauthorized|invalid api/i.test(message)) {
+      return "Setup needed: open the extension popup and update your API key.";
+    }
+
+    if (/disabled in the extension settings/i.test(message)) {
+      return "Suggestions are disabled for this site.";
+    }
+
+    if (/timed out|fetch|network|failed/i.test(message)) {
+      return "Could not reach the grammar API. Check your setup.";
+    }
+
+    return "";
+  }
+
   function refreshInlineUi() {
     placeButton();
+    if (state.notice?.dataset.open === "true") {
+      placePageNotice();
+    }
     if (!state.editor || !state.inlineIssues.length) {
       hideOverlay();
       hideIssueTray();

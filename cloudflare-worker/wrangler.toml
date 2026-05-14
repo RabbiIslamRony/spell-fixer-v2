@@ -7,6 +7,8 @@ preview_urls = false
 [vars]
 AI_MODEL = "gpt-4.1-mini"
 AI_API_URL = "https://api.openai.com/v1/chat/completions"
+STORE_QA_PREVIEWS = "false"
+QA_RETENTION_DAYS = "30"
 
 [[d1_databases]]
 binding = "DB"

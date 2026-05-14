@@ -57,6 +57,22 @@ https://self-hosted-grammar-worker.rony-sovware.workers.dev/grammar/check
 
 Open the extension popup and turn `Extension` off. While it is off, the extension stops checking text, hides inline UI, and blocks page checks without changing your API settings. Turn it back on from the same popup when you want live suggestions again.
 
+## Site access controls
+
+Open the popup, expand `Advanced`, and use `Site access` to choose where the extension can run:
+
+- `All sites`: check text on any supported website.
+- `All except listed sites`: disable suggestions on sensitive domains.
+- `Only listed sites`: run suggestions only on approved domains.
+
+Put one domain per line in `Site list`, for example `example.com` or `docs.example.com`.
+
+## Privacy notes
+
+The extension sends text from the active editor to the configured grammar API only after the user types or manually runs a check. Page URLs are not sent by default unless `Include page URL` is enabled.
+
+The Worker records QA metadata in D1: mode, language, input length, corrected length, suggestion count, success state, and error text. Text previews are disabled by default with `STORE_QA_PREVIEWS = "false"`, and old QA rows are pruned using `QA_RETENTION_DAYS`.
+
 ## API contract
 
 The extension sends this request:
@@ -133,6 +149,13 @@ npm install
 npx wrangler secret put GRAMMAR_API_KEY
 npx wrangler secret put AI_API_KEY
 npm run deploy
+```
+
+Optional QA/privacy variables in `wrangler.toml`:
+
+```text
+STORE_QA_PREVIEWS=false
+QA_RETENTION_DAYS=30
 ```
 
 `GRAMMAR_API_KEY` is the private token your Chrome extension sends as `Authorization: Bearer ...`.

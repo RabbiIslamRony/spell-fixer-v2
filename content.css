@@ -2,9 +2,11 @@
 .shga-panel,
 .shga-inline-overlay,
 .shga-issue-bubble,
+.shga-page-notice,
 .shga-issue-tray,
 .shga-issue-tray *,
 .shga-issue-bubble *,
+.shga-page-notice *,
 .shga-panel * {
   box-sizing: border-box;
   font-family: "Segoe UI", Arial, sans-serif;
@@ -328,6 +330,26 @@
 
 .shga-issue-tray[data-open="true"] {
   display: flex;
+}
+
+.shga-page-notice {
+  position: fixed;
+  z-index: 2147483647;
+  display: none;
+  width: min(318px, calc(100vw - 16px));
+  padding: 9px 10px;
+  border: 1px solid rgba(217, 119, 6, 0.24);
+  border-radius: 8px;
+  background: #fffbeb;
+  color: #78350f;
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.18);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.shga-page-notice[data-open="true"] {
+  display: block;
 }
 
 .shga-tray-count {

@@ -77,6 +77,20 @@
           Include page URL
         </label>
 
+        <label>
+          Site access
+          <select id="siteAccessMode">
+            <option value="all">All sites</option>
+            <option value="blocklist">All except listed sites</option>
+            <option value="allowlist">Only listed sites</option>
+          </select>
+        </label>
+
+        <label>
+          Site list
+          <textarea id="siteAccessList" rows="3" placeholder="example.com&#10;docs.example.com"></textarea>
+        </label>
+
         <button id="save" type="button" class="wide">Save settings</button>
       </details>
 

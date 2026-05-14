@@ -177,7 +177,8 @@ label {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   min-height: 38px;
   border: 1px solid rgba(20, 33, 61, 0.16);
@@ -191,9 +192,17 @@ select {
 
 input:focus-visible,
 select:focus-visible,
+textarea:focus-visible,
 button:focus-visible {
   outline: 2px solid #44bba4;
   outline-offset: 2px;
+}
+
+textarea {
+  min-height: 72px;
+  padding: 8px 10px;
+  line-height: 1.4;
+  resize: vertical;
 }
 
 .grid {

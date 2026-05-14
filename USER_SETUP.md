@@ -17,6 +17,16 @@ This guide is for people who receive the extension and only need to connect an A
 
 If the test passes, open any website text box and start typing. The `GA` badge appears only after you type and pause briefly.
 
+## Site controls
+
+Open `Advanced` in the popup if you need to control which websites can use suggestions.
+
+- Use `All sites` for normal use.
+- Use `All except listed sites` to block sensitive domains.
+- Use `Only listed sites` to run suggestions only on approved domains.
+
+Add one domain per line in `Site list`.
+
 ## What users need
 
 For normal use, users only need:
@@ -42,6 +52,7 @@ The API key must match the value saved in Cloudflare as `GRAMMAR_API_KEY`.
 
 - `Setup needed`: no API key is saved yet.
 - `Unauthorized`: the API key does not match the Worker `GRAMMAR_API_KEY`.
+- `Suggestions are disabled for this site`: the current domain is blocked or not in the allowlist.
 - `API test passed`: the extension can reach the backend.
 - No `GA` badge: click inside a text box, type text, then pause briefly.
 - No red underline: wait for the check to finish, then confirm the API test still passes.

@@ -37,6 +37,8 @@ The default `wrangler.toml` uses OpenAI-compatible chat completions:
 ```toml
 AI_API_URL = "https://api.openai.com/v1/chat/completions"
 AI_MODEL = "gpt-4.1-mini"
+STORE_QA_PREVIEWS = "false"
+QA_RETENTION_DAYS = "30"
 ```
 
 If your API is different, change those values in `wrangler.toml`.
@@ -105,3 +107,9 @@ Recent QA rows are available at:
 GET /qa/checks?limit=25
 Authorization: Bearer YOUR_GRAMMAR_API_KEY
 ```
+
+Privacy defaults:
+
+- `STORE_QA_PREVIEWS=false` stores lengths and status only, not text snippets.
+- Set `STORE_QA_PREVIEWS=true` only if you need short text previews for debugging.
+- `QA_RETENTION_DAYS=30` prunes older QA rows during normal request logging.

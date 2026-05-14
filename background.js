@@ -5,29 +5,26 @@ const DEFAULT_SETTINGS = {
   language: "en",
   defaultMode: "grammar",
   includePageUrl: false,
+  siteAccessMode: "all",
+  siteAccessList: "",
   timeoutMs: 30000,
-  settingsVersion: 4
+  settingsVersion: 5
 };
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.sync.get(null, (items) => {
-    const needsCurrentDefaults =
-      items.settingsVersion !== DEFAULT_SETTINGS.settingsVersion ||
-      !items.apiUrl ||
-      !items.apiKey;
-
     chrome.storage.sync.set({
       ...DEFAULT_SETTINGS,
       ...items,
-      ...(needsCurrentDefaults
-        ? {
-            apiUrl: DEFAULT_SETTINGS.apiUrl,
-            apiKey: DEFAULT_SETTINGS.apiKey,
-            extensionEnabled: DEFAULT_SETTINGS.extensionEnabled,
-            includePageUrl: DEFAULT_SETTINGS.includePageUrl,
-            settingsVersion: DEFAULT_SETTINGS.settingsVersion
-          }
-        : {})
+      apiUrl: typeof items.apiUrl === "string" && items.apiUrl.trim() ? items.apiUrl : DEFAULT_SETTINGS.apiUrl,
+      apiKey: typeof items.apiKey === "string" ? items.apiKey : DEFAULT_SETTINGS.apiKey,
+      extensionEnabled:
+        typeof items.extensionEnabled === "boolean" ? items.extensionEnabled : DEFAULT_SETTINGS.extensionEnabled,
+      includePageUrl:
+        typeof items.includePageUrl === "boolean" ? items.includePageUrl : DEFAULT_SETTINGS.includePageUrl,
+      siteAccessMode: normalizeSiteAccessMode(items.siteAccessMode),
+      siteAccessList: typeof items.siteAccessList === "string" ? items.siteAccessList : DEFAULT_SETTINGS.siteAccessList,
+      settingsVersion: DEFAULT_SETTINGS.settingsVersion
     });
   });
 });
@@ -62,8 +59,17 @@ async function handleCheck(payload, sender) {
     throw new Error("Set your API URL in the extension popup first.");
   }
 
+  if (!String(settings.apiKey || "").trim()) {
+    throw new Error("Add your Worker API key in the extension popup.");
+  }
+
   if (!text) {
     throw new Error("No text was selected or found in the active editor.");
+  }
+
+  const pageUrl = payload.pageUrl || sender?.tab?.url || "";
+  if (!isSiteAllowed(settings, pageUrl)) {
+    throw new Error("This site is disabled in the extension settings.");
   }
 
   const controller = new AbortController();
@@ -78,7 +84,7 @@ async function handleCheck(payload, sender) {
     text,
     mode: payload.mode || settings.defaultMode || "grammar",
     language: payload.language || settings.language || "en",
-    pageUrl: settings.includePageUrl ? payload.pageUrl || sender?.tab?.url || "" : "",
+    pageUrl: settings.includePageUrl ? pageUrl : "",
     context: payload.context || ""
   };
 
@@ -95,6 +101,9 @@ async function handleCheck(payload, sender) {
 
     if (!response.ok) {
       const detail = data?.error || data?.message || rawText || response.statusText;
+      if (response.status === 401 || response.status === 403) {
+        throw new Error("API key is invalid. Open the extension popup and update it.");
+      }
       throw new Error(`API ${response.status}: ${detail}`);
     }
 
@@ -107,6 +116,45 @@ async function handleCheck(payload, sender) {
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+function normalizeSiteAccessMode(value) {
+  return ["all", "blocklist", "allowlist"].includes(value) ? value : DEFAULT_SETTINGS.siteAccessMode;
+}
+
+function isSiteAllowed(settings, pageUrl) {
+  const mode = normalizeSiteAccessMode(settings.siteAccessMode);
+  if (mode === "all") {
+    return true;
+  }
+
+  const hostname = getHostname(pageUrl);
+  if (!hostname) {
+    return mode !== "allowlist";
+  }
+
+  const entries = parseSiteList(settings.siteAccessList);
+  if (!entries.length) {
+    return mode !== "allowlist";
+  }
+
+  const matched = entries.some((entry) => hostname === entry || hostname.endsWith(`.${entry}`));
+  return mode === "allowlist" ? matched : !matched;
+}
+
+function getHostname(value) {
+  try {
+    return new URL(value).hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function parseSiteList(value) {
+  return String(value || "")
+    .split(/[\n,]+/)
+    .map((item) => item.trim().replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0].toLowerCase())
+    .filter(Boolean);
 }
 
 function getSettings() {

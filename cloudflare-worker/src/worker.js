@@ -149,6 +149,7 @@ async function recordGrammarCheck(env, event) {
   }
 
   try {
+    const storePreviews = String(env.STORE_QA_PREVIEWS || "").toLowerCase() === "true";
     await env.DB.prepare(
       `INSERT INTO grammar_checks (
           mode,
@@ -173,13 +174,26 @@ async function recordGrammarCheck(env, event) {
         event.suggestionCount || 0,
         event.success ? 1 : 0,
         event.error || "",
-        preview(event.inputText || ""),
-        preview(event.correctedText || "")
+        storePreviews ? preview(event.inputText || "") : "",
+        storePreviews ? preview(event.correctedText || "") : ""
       )
       .run();
+
+    await pruneOldGrammarChecks(env);
   } catch (error) {
     console.warn("Failed to record grammar check", error);
   }
+}
+
+async function pruneOldGrammarChecks(env) {
+  const retentionDays = Number(env.QA_RETENTION_DAYS || 30);
+  if (!Number.isFinite(retentionDays) || retentionDays <= 0) {
+    return;
+  }
+
+  await env.DB.prepare("DELETE FROM grammar_checks WHERE created_at < datetime('now', ?)")
+    .bind(`-${Math.floor(retentionDays)} days`)
+    .run();
 }
 
 async function checkText({ text, mode, language, pageUrl, env }) {

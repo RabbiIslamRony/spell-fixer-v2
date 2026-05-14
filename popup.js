@@ -5,7 +5,9 @@ const DEFAULT_SETTINGS = {
   language: "en",
   defaultMode: "grammar",
   includePageUrl: false,
-  settingsVersion: 4
+  siteAccessMode: "all",
+  siteAccessList: "",
+  settingsVersion: 5
 };
 
 const fields = {
@@ -14,7 +16,9 @@ const fields = {
   extensionEnabled: document.querySelector("#extensionEnabled"),
   language: document.querySelector("#language"),
   defaultMode: document.querySelector("#defaultMode"),
-  includePageUrl: document.querySelector("#includePageUrl")
+  includePageUrl: document.querySelector("#includePageUrl"),
+  siteAccessMode: document.querySelector("#siteAccessMode"),
+  siteAccessList: document.querySelector("#siteAccessList")
 };
 
 const statusNode = document.querySelector("#status");
@@ -44,6 +48,8 @@ function loadSettings() {
     fields.language.value = settings.language || "en";
     fields.defaultMode.value = settings.defaultMode || "grammar";
     fields.includePageUrl.checked = Boolean(settings.includePageUrl);
+    fields.siteAccessMode.value = normalizeSiteAccessMode(settings.siteAccessMode);
+    fields.siteAccessList.value = settings.siteAccessList || "";
     updateStatusCard(settings);
   });
 }
@@ -105,8 +111,14 @@ function readForm() {
     language: fields.language.value.trim() || "en",
     defaultMode: fields.defaultMode.value,
     includePageUrl: fields.includePageUrl.checked,
+    siteAccessMode: normalizeSiteAccessMode(fields.siteAccessMode.value),
+    siteAccessList: fields.siteAccessList.value.trim(),
     settingsVersion: DEFAULT_SETTINGS.settingsVersion
   };
+}
+
+function normalizeSiteAccessMode(value) {
+  return ["all", "blocklist", "allowlist"].includes(value) ? value : DEFAULT_SETTINGS.siteAccessMode;
 }
 
 function updateStatusCard(settings) {
