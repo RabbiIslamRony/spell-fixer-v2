@@ -15,6 +15,7 @@ Use this before packaging or selling the extension.
 - Load unpacked extension from `chrome://extensions`.
 - Confirm the toolbar icon and extension details icon appear.
 - Open the popup with no API key and confirm `Setup needed` is visible.
+- Open `popup.html` directly in a normal browser tab and confirm it shows a friendly extension-context message instead of a JS crash.
 - Click `Setup`, paste a Worker API key, save, then click `Test`.
 
 ## Editor behavior

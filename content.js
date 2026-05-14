@@ -1506,8 +1506,14 @@
 
   function sendMessage(message) {
     return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage(message, (response) => {
-        const error = chrome.runtime.lastError;
+      const runtime = globalThis.chrome?.runtime;
+      if (!runtime?.sendMessage) {
+        reject(new Error("Extension runtime is not available. Reload the extension from chrome://extensions."));
+        return;
+      }
+
+      runtime.sendMessage(message, (response) => {
+        const error = runtime.lastError;
         if (error) {
           reject(new Error(error.message));
           return;

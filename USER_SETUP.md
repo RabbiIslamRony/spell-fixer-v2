@@ -53,6 +53,7 @@ The API key must match the value saved in Cloudflare as `GRAMMAR_API_KEY`.
 - `Setup needed`: no API key is saved yet.
 - `Unauthorized`: the API key does not match the Worker `GRAMMAR_API_KEY`.
 - `Suggestions are disabled for this site`: the current domain is blocked or not in the allowlist.
+- `Open this popup from the Chrome extension toolbar`: do not open `popup.html` directly from the file system or GitHub.
 - `API test passed`: the extension can reach the backend.
 - No `GA` badge: click inside a text box, type text, then pause briefly.
 - No red underline: wait for the check to finish, then confirm the API test still passes.

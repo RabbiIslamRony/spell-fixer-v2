@@ -27,13 +27,14 @@ const statusDot = document.querySelector(".status-dot");
 const setupNotice = document.querySelector("#setupNotice");
 const setupButton = document.querySelector("#setupKey");
 const advancedPanel = document.querySelector("#advanced");
+const extensionApi = getExtensionApi();
 
 loadSettings();
 
 document.querySelector("#save").addEventListener("click", saveSettings);
 document.querySelector("#test").addEventListener("click", testApi);
 document.querySelector("#reset").addEventListener("click", resetSettings);
-document.querySelector("#options").addEventListener("click", () => chrome.runtime.openOptionsPage());
+document.querySelector("#options").addEventListener("click", openOptions);
 setupButton.addEventListener("click", openApiSetup);
 fields.extensionEnabled.addEventListener("change", async () => {
   await saveSettings();
@@ -41,31 +42,41 @@ fields.extensionEnabled.addEventListener("change", async () => {
 });
 
 function loadSettings() {
-  chrome.storage.sync.get(DEFAULT_SETTINGS, (settings) => {
-    fields.apiUrl.value = settings.apiUrl || DEFAULT_SETTINGS.apiUrl;
-    fields.apiKey.value = settings.apiKey || DEFAULT_SETTINGS.apiKey;
-    fields.extensionEnabled.checked = settings.extensionEnabled !== false;
-    fields.language.value = settings.language || "en";
-    fields.defaultMode.value = settings.defaultMode || "grammar";
-    fields.includePageUrl.checked = Boolean(settings.includePageUrl);
-    fields.siteAccessMode.value = normalizeSiteAccessMode(settings.siteAccessMode);
-    fields.siteAccessList.value = settings.siteAccessList || "";
+  if (!extensionApi.storage) {
+    applySettingsToForm(DEFAULT_SETTINGS);
+    updateStatusCard(DEFAULT_SETTINGS);
+    setStatus("Open this popup from the Chrome extension toolbar.");
+    return;
+  }
+
+  extensionApi.storage.get(DEFAULT_SETTINGS, (settings) => {
+    applySettingsToForm(settings);
     updateStatusCard(settings);
   });
 }
 
 function saveSettings() {
+  if (!extensionApi.storage) {
+    setStatus("Settings can only be saved inside the installed extension.");
+    return Promise.resolve(false);
+  }
+
   const settings = readForm();
   return new Promise((resolve) => {
-    chrome.storage.sync.set(settings, () => {
+    extensionApi.storage.set(settings, () => {
       updateStatusCard(settings);
       setStatus("Saved.");
-      resolve();
+      resolve(true);
     });
   });
 }
 
 async function testApi() {
+  if (!extensionApi.runtime) {
+    setStatus("Open this popup from the Chrome extension toolbar to test.");
+    return;
+  }
+
   if (!readForm().apiKey) {
     openApiSetup();
     setStatus("Add your Worker API key first.");
@@ -96,11 +107,27 @@ async function testApi() {
 }
 
 async function resetSettings() {
+  if (!extensionApi.storage) {
+    setStatus("Reset is available only inside the installed extension.");
+    return;
+  }
+
   await new Promise((resolve) => {
-    chrome.storage.sync.set(DEFAULT_SETTINGS, resolve);
+    extensionApi.storage.set(DEFAULT_SETTINGS, resolve);
   });
   loadSettings();
   setStatus("Defaults restored. Add your Worker API key before testing.");
+}
+
+function applySettingsToForm(settings) {
+  fields.apiUrl.value = settings.apiUrl || DEFAULT_SETTINGS.apiUrl;
+  fields.apiKey.value = settings.apiKey || DEFAULT_SETTINGS.apiKey;
+  fields.extensionEnabled.checked = settings.extensionEnabled !== false;
+  fields.language.value = settings.language || "en";
+  fields.defaultMode.value = settings.defaultMode || "grammar";
+  fields.includePageUrl.checked = Boolean(settings.includePageUrl);
+  fields.siteAccessMode.value = normalizeSiteAccessMode(settings.siteAccessMode);
+  fields.siteAccessList.value = settings.siteAccessList || "";
 }
 
 function readForm() {
@@ -136,10 +163,24 @@ function openApiSetup() {
   fields.apiKey.focus();
 }
 
+function openOptions() {
+  if (!extensionApi.openOptionsPage) {
+    setStatus("Docs open from the installed extension popup.");
+    return;
+  }
+
+  extensionApi.openOptionsPage();
+}
+
 function sendMessage(message) {
   return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage(message, (response) => {
-      const error = chrome.runtime.lastError;
+    if (!extensionApi.runtime) {
+      reject(new Error("Open this popup from the Chrome extension toolbar."));
+      return;
+    }
+
+    extensionApi.runtime.sendMessage(message, (response) => {
+      const error = extensionApi.runtime.lastError;
       if (error) {
         reject(new Error(error.message));
         return;
@@ -151,4 +192,15 @@ function sendMessage(message) {
 
 function setStatus(message) {
   statusNode.textContent = message;
+}
+
+function getExtensionApi() {
+  const runtime = globalThis.chrome?.runtime;
+  const storage = globalThis.chrome?.storage?.sync;
+
+  return {
+    runtime: runtime?.sendMessage ? runtime : null,
+    storage: storage?.get && storage?.set ? storage : null,
+    openOptionsPage: runtime?.openOptionsPage ? () => runtime.openOptionsPage() : null
+  };
 }
