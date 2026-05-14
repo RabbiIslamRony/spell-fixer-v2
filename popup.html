@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Grammar Assistant</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <h1>Grammar Assistant</h1>
+        <p id="connectionText">Connected</p>
+      </header>
+
+      <div class="status-card">
+        <span class="status-dot" aria-hidden="true"></span>
+        <div>
+          <strong>Live suggestions</strong>
+          <span>Wrong words are underlined while you type.</span>
+        </div>
+      </div>
+
+      <div id="setupNotice" class="setup-card" hidden>
+        <div>
+          <strong>Connect API key</strong>
+          <span>Paste your Worker token once. No source edit needed.</span>
+        </div>
+        <button id="setupKey" type="button">Setup</button>
+      </div>
+
+      <label class="toggle-row">
+        <span>
+          <strong>Extension</strong>
+          <small>Show suggestions while typing</small>
+        </span>
+        <input id="extensionEnabled" type="checkbox">
+      </label>
+
+      <div class="actions">
+        <button id="test" type="button">Test</button>
+        <button id="reset" type="button">Reset</button>
+        <button id="options" type="button">Docs</button>
+      </div>
+
+      <details id="advanced" class="advanced">
+        <summary>Advanced</summary>
+
+        <label>
+          API URL
+          <input id="apiUrl" type="url" placeholder="https://self-hosted-grammar-worker.rony-sovware.workers.dev/grammar/check">
+        </label>
+
+        <label>
+          API key
+          <input id="apiKey" type="password" placeholder="Worker access token">
+        </label>
+
+        <div class="grid">
+          <label>
+            Language
+            <input id="language" type="text" placeholder="en">
+          </label>
+
+          <label>
+            Default mode
+            <select id="defaultMode">
+              <option value="grammar">Fix grammar</option>
+              <option value="rewrite">Rewrite</option>
+              <option value="shorten">Shorten</option>
+            </select>
+          </label>
+        </div>
+
+        <label class="checkbox">
+          <input id="includePageUrl" type="checkbox">
+          Include page URL
+        </label>
+
+        <button id="save" type="button" class="wide">Save settings</button>
+      </details>
+
+      <p id="status" class="status" aria-live="polite"></p>
+    </main>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
