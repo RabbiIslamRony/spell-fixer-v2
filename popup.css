@@ -5,19 +5,41 @@
   background: #ffffff;
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 body {
   width: 320px;
   margin: 0;
+  background: #ffffff;
 }
 
 .shell {
   display: grid;
-  gap: 12px;
-  padding: 14px;
+  gap: 9px;
+  padding: 12px;
+}
+
+.app-header {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.app-logo {
+  display: block;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
 }
 
 h1 {
-  margin: 0 0 4px;
+  margin: 0 0 2px;
   font-size: 15px;
   line-height: 1.2;
 }
@@ -31,20 +53,19 @@ p {
 
 .status-card {
   display: grid;
-  grid-template-columns: 10px 1fr;
-  gap: 10px;
+  grid-template-columns: 9px 1fr;
+  gap: 8px;
   align-items: start;
-  border: 1px solid rgba(20, 33, 61, 0.12);
-  border-radius: 8px;
-  padding: 10px;
-  background: #f8fafc;
+  padding: 8px 0;
+  border-top: 1px solid rgba(20, 33, 61, 0.08);
+  border-bottom: 1px solid rgba(20, 33, 61, 0.08);
 }
 
 .status-card strong {
   display: block;
-  margin-bottom: 2px;
+  margin-bottom: 1px;
   color: #14213d;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .status-card span:not(.status-dot) {
@@ -55,9 +76,9 @@ p {
 }
 
 .status-dot {
-  width: 9px;
-  height: 9px;
-  margin-top: 4px;
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
   border-radius: 99px;
   background: #15803d;
 }
@@ -73,11 +94,11 @@ p {
 .setup-card {
   display: grid;
   grid-template-columns: 1fr auto;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
-  border: 1px solid rgba(217, 119, 6, 0.24);
-  border-radius: 8px;
-  padding: 10px;
+  border: 1px solid rgba(217, 119, 6, 0.22);
+  border-radius: 6px;
+  padding: 8px;
   background: #fffbeb;
 }
 
@@ -92,7 +113,7 @@ p {
 
 .setup-card strong {
   color: #78350f;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .setup-card span {
@@ -102,7 +123,7 @@ p {
 }
 
 .setup-card button {
-  min-width: 72px;
+  min-width: 62px;
   border-color: rgba(217, 119, 6, 0.32);
   color: #78350f;
   background: #ffffff;
@@ -112,11 +133,11 @@ p {
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
-  gap: 12px;
-  min-height: 48px;
+  gap: 10px;
+  min-height: 42px;
   border: 1px solid rgba(20, 33, 61, 0.12);
-  border-radius: 8px;
-  padding: 10px;
+  border-radius: 6px;
+  padding: 8px;
   background: #ffffff;
 }
 
@@ -127,7 +148,7 @@ p {
 
 .toggle-row strong {
   color: #14213d;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .toggle-row small {
@@ -138,8 +159,8 @@ p {
 }
 
 .toggle-row input {
-  width: 42px;
-  min-height: 24px;
+  width: 38px;
+  min-height: 22px;
   appearance: none;
   border: 0;
   border-radius: 99px;
@@ -152,8 +173,8 @@ p {
 .toggle-row input::before {
   content: "";
   display: block;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   border-radius: 99px;
   background: #ffffff;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.24);
@@ -165,24 +186,27 @@ p {
 }
 
 .toggle-row input:checked::before {
-  transform: translateX(18px);
+  transform: translateX(16px);
 }
 
 label {
   display: grid;
   gap: 6px;
+  min-width: 0;
   color: #334155;
   font-size: 12px;
   font-weight: 700;
+  line-height: 1.25;
 }
 
 input,
 select,
 textarea {
+  display: block;
   width: 100%;
   min-height: 38px;
   border: 1px solid rgba(20, 33, 61, 0.16);
-  border-radius: 7px;
+  border-radius: 6px;
   padding: 0 10px;
   color: #14213d;
   background: #ffffff;
@@ -199,7 +223,7 @@ button:focus-visible {
 }
 
 textarea {
-  min-height: 72px;
+  min-height: 68px;
   padding: 8px 10px;
   line-height: 1.4;
   resize: vertical;
@@ -227,12 +251,12 @@ textarea {
 .actions {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: 10px;
+  gap: 8px;
 }
 
 button {
-  min-height: 38px;
-  border-radius: 7px;
+  min-height: 36px;
+  border-radius: 6px;
   border: 1px solid rgba(20, 33, 61, 0.14);
   background: #ffffff;
   color: #14213d;
@@ -252,7 +276,7 @@ button {
 
 .advanced {
   border-top: 1px solid rgba(20, 33, 61, 0.1);
-  padding-top: 12px;
+  padding-top: 9px;
 }
 
 .advanced summary {
@@ -263,31 +287,37 @@ button {
 }
 
 .advanced[open] {
-  display: grid;
-  gap: 16px;
+  display: block;
 }
 
 .advanced[open] summary {
-  margin-bottom: 4px;
+  margin-bottom: 12px;
 }
 
 .advanced > label {
-  gap: 8px;
+  gap: 7px;
+  margin: 0 0 14px;
 }
 
 .advanced .grid {
-  gap: 14px;
+  column-gap: 12px;
+  row-gap: 14px;
+  margin: 0 0 14px;
+}
+
+.advanced .grid label {
+  gap: 7px;
 }
 
 .advanced .checkbox {
-  gap: 8px;
+  gap: 7px;
   min-height: 24px;
-  margin-top: -2px;
+  margin: 0 0 14px;
 }
 
 .advanced .wide {
-  min-height: 40px;
-  margin-top: 2px;
+  min-height: 38px;
+  margin-top: 0;
 }
 
 .external-only[hidden] {
@@ -295,5 +325,7 @@ button {
 }
 
 .status {
-  min-height: 18px;
+  min-height: 16px;
+  font-size: 12px;
+  line-height: 1.35;
 }

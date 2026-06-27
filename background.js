@@ -12,6 +12,12 @@ const DEFAULT_SETTINGS = {
   settingsVersion: 6
 };
 
+const RESPONSE_CACHE_LIMIT = 80;
+const RESPONSE_CACHE_TTL_MS = 120000;
+const QWEN_ENDPOINT_CACHE_KEY = "qwenEndpointId";
+const activeInlineControllers = new Map();
+const responseCache = new Map();
+
 const AI_PROVIDERS = {
   gemini: {
     label: "Gemini",
@@ -58,10 +64,21 @@ chrome.runtime.onInstalled.addListener(() => {
       settingsVersion: DEFAULT_SETTINGS.settingsVersion
     });
   });
+  injectContentScriptsIntoOpenTabs();
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (!message || message.type !== "shga.check") {
+  if (!message) {
+    return false;
+  }
+
+  if (message.type === "shga.cancelInlineCheck") {
+    cancelInlineCheck(sender, message.payload || {});
+    sendResponse({ ok: true });
+    return false;
+  }
+
+  if (message.type !== "shga.check") {
     return false;
   }
 
@@ -81,65 +98,91 @@ async function handleCheck(payload, sender) {
   const settings = await getSettings();
   const apiProvider = normalizeApiProvider(settings.apiProvider || inferProviderFromKey(settings.apiKey));
   const apiUrl = String(settings.apiUrl || "").trim();
+  const apiKey = String(settings.apiKey || "").trim();
   const text = String(payload.text || "").trim();
-
-  if (settings.extensionEnabled === false && payload.context !== "popup-test") {
-    throw new Error("Extension is off.");
-  }
-
-  if (!String(settings.apiKey || "").trim()) {
-    throw new Error(`Add your ${getProviderLabel(apiProvider)} API key in the extension popup.`);
-  }
-
-  if (!text) {
-    throw new Error("No text was selected or found in the active editor.");
-  }
-
-  const pageUrl = payload.pageUrl || sender?.tab?.url || "";
-  if (!isSiteAllowed(settings, pageUrl)) {
-    throw new Error("This site is disabled in the extension settings.");
-  }
-
-  if (apiProvider !== "external") {
-    return checkWithDirectProvider({
-      provider: apiProvider,
-      apiKey: String(settings.apiKey || "").trim(),
-      text,
-      mode: payload.mode || settings.defaultMode || "grammar",
-      language: payload.language || settings.language || "en",
-      pageUrl: settings.includePageUrl ? pageUrl : "",
-      timeoutMs: Number(settings.timeoutMs) || 30000
-    });
-  }
-
-  if (!apiUrl) {
-    throw new Error("Set your External API URL in the extension popup first.");
-  }
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), Number(settings.timeoutMs) || 30000);
-  const headers = { "Content-Type": "application/json" };
-
-  if (settings.apiKey) {
-    headers.Authorization = `Bearer ${settings.apiKey}`;
-  }
-
-  const body = {
-    text,
-    mode: payload.mode || settings.defaultMode || "grammar",
-    language: payload.language || settings.language || "en",
-    pageUrl: settings.includePageUrl ? pageUrl : "",
-    context: payload.context || ""
-  };
+  const mode = payload.mode || settings.defaultMode || "grammar";
+  const language = payload.language || settings.language || "en";
+  const scope = payload.scope === "inline" ? "inline" : "panel";
+  const requestControl = beginRequestControl(scope, sender, payload);
 
   try {
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-      signal: controller.signal
-    });
+    if (settings.extensionEnabled === false && payload.context !== "popup-test") {
+      throw new Error("Extension is off.");
+    }
 
+    if (!apiKey) {
+      throw new Error(`Add your ${getProviderLabel(apiProvider)} API key in the extension popup.`);
+    }
+
+    if (!text) {
+      throw new Error("No text was selected or found in the active editor.");
+    }
+
+    const pageUrl = payload.pageUrl || sender?.tab?.url || "";
+    if (!isSiteAllowed(settings, pageUrl)) {
+      throw new Error("This site is disabled in the extension settings.");
+    }
+
+    const cacheKey = getResponseCacheKey({
+      provider: apiProvider,
+      apiUrl,
+      apiKey,
+      mode,
+      language,
+      scope,
+      text
+    });
+    const cached = getCachedResponse(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    let result;
+    if (apiProvider !== "external") {
+      result = await checkWithDirectProvider({
+        provider: apiProvider,
+        apiKey,
+        text,
+        mode,
+        language,
+        pageUrl: settings.includePageUrl ? pageUrl : "",
+        timeoutMs: Number(settings.timeoutMs) || 30000,
+        scope,
+        signal: requestControl.signal
+      });
+      rememberResponse(cacheKey, result);
+      return result;
+    }
+
+    if (!apiUrl) {
+      throw new Error("Set your External API URL in the extension popup first.");
+    }
+
+    const headers = { "Content-Type": "application/json" };
+
+    if (apiKey) {
+      headers.Authorization = `Bearer ${apiKey}`;
+    }
+
+    const body = {
+      text,
+      mode,
+      language,
+      pageUrl: settings.includePageUrl ? pageUrl : "",
+      context: payload.context || "",
+      scope
+    };
+
+    const response = await fetchWithTimeout(
+      apiUrl,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body)
+      },
+      Number(settings.timeoutMs) || 30000,
+      requestControl.signal
+    );
     const rawText = await response.text();
     const data = parseJson(rawText);
 
@@ -151,28 +194,30 @@ async function handleCheck(payload, sender) {
       throw new Error(`API ${response.status}: ${detail}`);
     }
 
-    return normalizeApiResponse(data ?? rawText);
+    result = normalizeApiResponse(data ?? rawText);
+    rememberResponse(cacheKey, result);
+    return result;
   } catch (error) {
     if (error?.name === "AbortError") {
-      throw new Error("API request timed out.");
+      throw new Error(scope === "inline" ? "Inline request replaced by newer typing." : "API request timed out.");
     }
     throw error;
   } finally {
-    clearTimeout(timeoutId);
+    requestControl.finish();
   }
 }
 
-async function checkWithDirectProvider({ provider, apiKey, text, mode, language, pageUrl, timeoutMs }) {
-  const prompt = buildAiPrompt({ text, mode, language, pageUrl });
+async function checkWithDirectProvider({ provider, apiKey, text, mode, language, pageUrl, timeoutMs, scope, signal }) {
+  const prompt = buildAiPrompt({ text, mode, language, pageUrl, scope });
   const result =
     provider === "gemini"
-      ? await callGemini({ apiKey, prompt, timeoutMs })
-      : await callQwen({ apiKey, prompt, timeoutMs });
+      ? await callGemini({ apiKey, prompt, timeoutMs, signal })
+      : await callQwen({ apiKey, prompt, timeoutMs, signal });
   const parsed = parseModelJson(result.text);
   return repairIssueOffsets(normalizeApiResponse(parsed || result.text), text);
 }
 
-async function callGemini({ apiKey, prompt, timeoutMs }) {
+async function callGemini({ apiKey, prompt, timeoutMs, signal }) {
   const response = await fetchWithTimeout(
     AI_PROVIDERS.gemini.endpoint,
     {
@@ -186,7 +231,8 @@ async function callGemini({ apiKey, prompt, timeoutMs }) {
         input: prompt
       })
     },
-    timeoutMs
+    timeoutMs,
+    signal
   );
 
   const data = await readJsonResponse(response);
@@ -199,9 +245,9 @@ async function callGemini({ apiKey, prompt, timeoutMs }) {
   };
 }
 
-async function callQwen({ apiKey, prompt, timeoutMs }) {
+async function callQwen({ apiKey, prompt, timeoutMs, signal }) {
   const errors = [];
-  for (const endpoint of AI_PROVIDERS.qwen.endpoints) {
+  for (const endpoint of await getQwenEndpointOrder()) {
     try {
       const response = await fetchWithTimeout(
         endpoint.url,
@@ -225,7 +271,8 @@ async function callQwen({ apiKey, prompt, timeoutMs }) {
             ]
           })
         },
-        timeoutMs
+        timeoutMs,
+        signal
       );
 
       const data = await readJsonResponse(response);
@@ -233,11 +280,15 @@ async function callQwen({ apiKey, prompt, timeoutMs }) {
         throwProviderError(endpoint.label, response, data);
       }
 
+      rememberQwenEndpoint(endpoint.id);
       return {
         text: extractQwenText(data),
         endpointId: endpoint.id
       };
     } catch (error) {
+      if (signal?.aborted) {
+        throw error;
+      }
       errors.push(`${endpoint.label}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
@@ -245,9 +296,16 @@ async function callQwen({ apiKey, prompt, timeoutMs }) {
   throw new Error(`Qwen request failed. ${errors.join(" | ")}`);
 }
 
-async function fetchWithTimeout(url, options, timeoutMs) {
+async function fetchWithTimeout(url, options, timeoutMs, signal) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), Number(timeoutMs) || 30000);
+  const abortFromSignal = () => controller.abort();
+
+  if (signal?.aborted) {
+    controller.abort();
+  } else {
+    signal?.addEventListener?.("abort", abortFromSignal, { once: true });
+  }
 
   try {
     return await fetch(url, {
@@ -256,11 +314,12 @@ async function fetchWithTimeout(url, options, timeoutMs) {
     });
   } catch (error) {
     if (error?.name === "AbortError") {
-      throw new Error("API request timed out.");
+      throw new Error(signal?.aborted ? "Inline request replaced by newer typing." : "API request timed out.");
     }
     throw error;
   } finally {
     clearTimeout(timeoutId);
+    signal?.removeEventListener?.("abort", abortFromSignal);
   }
 }
 
@@ -278,21 +337,29 @@ function throwProviderError(label, response, data) {
   throw new Error(`${label} API ${response.status}: ${detail}`);
 }
 
-function buildAiPrompt({ text, mode, language, pageUrl }) {
+function buildAiPrompt({ text, mode, language, pageUrl, scope }) {
   const task =
     mode === "rewrite"
       ? "Rewrite the text for clarity while preserving meaning."
       : mode === "shorten"
         ? "Shorten the text while preserving meaning."
         : "Fix grammar, spelling, punctuation, and obvious wording mistakes.";
+  const inline = scope === "inline";
 
   return [
     `Task: ${task}`,
     `Language: ${language || "en"}`,
     pageUrl ? `Page URL context: ${pageUrl}` : "",
+    inline
+      ? "Inline check: return issue offsets only for the provided input. Do not rewrite the whole text."
+      : "",
     "Return only valid JSON with this shape:",
-    '{"correctedText":"...", "issues":[{"start":0,"end":4,"original":"text","replacement":"fixed","title":"Grammar","explanation":"short reason","severity":"grammar"}], "suggestions":[]}',
-    "Use zero-based character offsets from the original input for issues. If offsets are uncertain, return an empty issues array but still return correctedText.",
+    inline
+      ? '{"issues":[{"start":0,"end":4,"original":"text","replacement":"fixed","title":"Grammar","explanation":"short reason","severity":"grammar"}], "suggestions":[]}'
+      : '{"correctedText":"...", "issues":[{"start":0,"end":4,"original":"text","replacement":"fixed","title":"Grammar","explanation":"short reason","severity":"grammar"}], "suggestions":[]}',
+    inline
+      ? "Use zero-based character offsets from the provided input. If offsets are uncertain, return an empty issues array."
+      : "Use zero-based character offsets from the original input for issues. If offsets are uncertain, return an empty issues array but still return correctedText.",
     "Original input:",
     text
   ].filter(Boolean).join("\n");
@@ -477,6 +544,178 @@ function parseSiteList(value) {
     .split(/[\n,]+/)
     .map((item) => item.trim().replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0].toLowerCase())
     .filter(Boolean);
+}
+
+function beginRequestControl(scope, sender, payload) {
+  if (scope !== "inline") {
+    return {
+      signal: null,
+      finish() {}
+    };
+  }
+
+  const key = getInlineRequestKey(sender);
+  const previous = activeInlineControllers.get(key);
+  previous?.controller.abort();
+
+  const controller = new AbortController();
+  const requestId = Number(payload.requestId) || 0;
+  activeInlineControllers.set(key, { controller, requestId });
+
+  return {
+    signal: controller.signal,
+    finish() {
+      const active = activeInlineControllers.get(key);
+      if (active?.controller === controller) {
+        activeInlineControllers.delete(key);
+      }
+    }
+  };
+}
+
+function cancelInlineCheck(sender, payload) {
+  const key = getInlineRequestKey(sender);
+  const active = activeInlineControllers.get(key);
+  if (!active) {
+    return;
+  }
+
+  const requestId = Number(payload.requestId) || 0;
+  if (!requestId || requestId === active.requestId) {
+    active.controller.abort();
+    activeInlineControllers.delete(key);
+  }
+}
+
+function getInlineRequestKey(sender) {
+  return `${sender?.tab?.id ?? "no-tab"}:${sender?.frameId ?? 0}`;
+}
+
+function getResponseCacheKey({ provider, apiUrl, apiKey, mode, language, scope, text }) {
+  return [
+    provider,
+    provider === "external" ? apiUrl : "",
+    getApiKeyFingerprint(apiKey),
+    mode || "grammar",
+    language || "en",
+    scope || "panel",
+    normalizeCacheText(text)
+  ].join("|");
+}
+
+function getApiKeyFingerprint(apiKey) {
+  const value = String(apiKey || "");
+  return `${value.length}:${value.slice(0, 6)}:${value.slice(-4)}`;
+}
+
+function normalizeCacheText(text) {
+  return String(text || "");
+}
+
+function getCachedResponse(key) {
+  const item = responseCache.get(key);
+  if (!item) {
+    return null;
+  }
+
+  if (Date.now() - item.createdAt > RESPONSE_CACHE_TTL_MS) {
+    responseCache.delete(key);
+    return null;
+  }
+
+  responseCache.delete(key);
+  responseCache.set(key, item);
+  return cloneData(item.data);
+}
+
+function rememberResponse(key, data) {
+  responseCache.set(key, {
+    createdAt: Date.now(),
+    data: cloneData(data)
+  });
+
+  while (responseCache.size > RESPONSE_CACHE_LIMIT) {
+    const firstKey = responseCache.keys().next().value;
+    responseCache.delete(firstKey);
+  }
+}
+
+function cloneData(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+async function getQwenEndpointOrder() {
+  const cachedId = await getLocalValue(QWEN_ENDPOINT_CACHE_KEY);
+  const endpoints = AI_PROVIDERS.qwen.endpoints;
+  if (!cachedId) {
+    return endpoints;
+  }
+
+  const preferred = endpoints.find((endpoint) => endpoint.id === cachedId);
+  if (!preferred) {
+    return endpoints;
+  }
+
+  return [preferred, ...endpoints.filter((endpoint) => endpoint.id !== cachedId)];
+}
+
+function rememberQwenEndpoint(endpointId) {
+  if (!endpointId || !chrome.storage?.local) {
+    return;
+  }
+
+  chrome.storage.local.set({ [QWEN_ENDPOINT_CACHE_KEY]: endpointId });
+}
+
+function getLocalValue(key) {
+  return new Promise((resolve) => {
+    if (!chrome.storage?.local) {
+      resolve("");
+      return;
+    }
+
+    chrome.storage.local.get({ [key]: "" }, (items) => {
+      resolve(items?.[key] || "");
+    });
+  });
+}
+
+function injectContentScriptsIntoOpenTabs() {
+  if (!chrome.tabs?.query || !chrome.scripting?.executeScript || !chrome.scripting?.insertCSS) {
+    return;
+  }
+
+  chrome.tabs.query({ url: ["http://*/*", "https://*/*"] }, (tabs = []) => {
+    if (chrome.runtime.lastError) {
+      return;
+    }
+
+    tabs.forEach((tab) => {
+      if (!tab.id) {
+        return;
+      }
+
+      chrome.scripting.insertCSS(
+        {
+          target: { tabId: tab.id },
+          files: ["content.css"]
+        },
+        () => {
+          void chrome.runtime.lastError;
+        }
+      );
+
+      chrome.scripting.executeScript(
+        {
+          target: { tabId: tab.id },
+          files: ["content.js"]
+        },
+        () => {
+          void chrome.runtime.lastError;
+        }
+      );
+    });
+  });
 }
 
 function getSettings() {

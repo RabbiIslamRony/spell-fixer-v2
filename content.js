@@ -4,14 +4,30 @@
   }
   window.__selfHostedGrammarAssistantLoaded = true;
 
-  const AUTO_CHECK_DELAY = 650;
+  const ASSISTANT_ELEMENT_SELECTOR = [
+    ".shga-button",
+    ".shga-panel",
+    ".shga-inline-overlay",
+    ".shga-issue-bubble",
+    ".shga-page-notice",
+    ".shga-issue-tray"
+  ].join(",");
+  const AUTO_CHECK_DELAY = 350;
+  const INLINE_FAST_CHECK_DELAY = 300;
+  const INLINE_WORD_CHECK_DELAY = 600;
+  const INLINE_PASTE_CHECK_DELAY = 250;
+  const INLINE_STATUS_DELAY = 180;
+  const INLINE_SLOW_STATUS_DELAY = 2000;
+  const INLINE_MIN_TEXT_LENGTH = 3;
   const BADGE_SHOW_DELAY = 500;
   const BADGE_SIZE = 34;
   const BADGE_VIEWPORT_GAP = 8;
   const BADGE_EDITOR_GAP = 10;
   const BADGE_RIGHT_RESERVE = 76;
-  const INLINE_TEXT_LIMIT = 1400;
+  const INLINE_TEXT_LIMIT = 800;
   const CONTENT_DEFAULT_SETTINGS = {
+    apiProvider: "qwen",
+    language: "en",
     extensionEnabled: true,
     siteAccessMode: "all",
     siteAccessList: "",
@@ -28,6 +44,8 @@
     siteAccessMode: "all",
     siteAccessList: "",
     siteAllowed: true,
+    apiProvider: "qwen",
+    language: "en",
     button: null,
     panel: null,
     resultNode: null,
@@ -43,12 +61,16 @@
     inlineText: "",
     lastCheckedText: "",
     checkCache: new Map(),
-    pendingInlineCheck: false,
     suppressNextInputClear: false,
     badgeReady: false,
     badgeTimer: null,
     checkTimer: null,
-    requestId: 0
+    inlineStatusTimer: null,
+    inlineSlowTimer: null,
+    requestId: 0,
+    activeInlineRequestId: 0,
+    lastInlineCheckKey: "",
+    isComposing: false
   };
 
   const MODES = [
@@ -60,6 +82,7 @@
   init();
 
   function init() {
+    removeExistingAssistantUi();
     state.button = createButton();
     state.panel = createPanel();
     state.overlay = createOverlay();
@@ -71,6 +94,8 @@
     document.addEventListener("focusin", handleFocusIn, true);
     document.addEventListener("focusout", handleFocusOut, true);
     document.addEventListener("input", handleInput, true);
+    document.addEventListener("compositionstart", handleCompositionStart, true);
+    document.addEventListener("compositionend", handleCompositionEnd, true);
     document.addEventListener("mousedown", handleOutsidePointer, true);
     document.addEventListener("click", handleEditorClick, true);
     document.addEventListener("keyup", handleKeyUp, true);
@@ -85,8 +110,17 @@
     const button = document.createElement("button");
     button.className = "shga-button";
     button.type = "button";
-    button.textContent = "GA";
     button.title = "Check text";
+    const icon = document.createElement("img");
+    icon.className = "shga-button-icon";
+    icon.alt = "";
+    icon.setAttribute("aria-hidden", "true");
+    icon.src = chrome.runtime.getURL("icons/icon-48.png");
+    icon.addEventListener("error", () => {
+      icon.remove();
+      button.textContent = "GA";
+    }, { once: true });
+    button.append(icon);
     button.addEventListener("mousedown", (event) => event.preventDefault());
     button.addEventListener("click", () => {
       openPanel();
@@ -178,6 +212,8 @@
 
       if (
         changes.extensionEnabled ||
+        changes.apiProvider ||
+        changes.language ||
         changes.siteAccessMode ||
         changes.siteAccessList ||
         changes.settingsVersion
@@ -190,6 +226,8 @@
   function applyContentSettings(settings) {
     const nextEnabled = settings.extensionEnabled !== false;
     state.extensionEnabled = nextEnabled;
+    state.apiProvider = normalizeApiProvider(settings.apiProvider);
+    state.language = String(settings.language || "en").trim() || "en";
     state.siteAccessMode = normalizeSiteAccessMode(settings.siteAccessMode);
     state.siteAccessList = settings.siteAccessList || "";
     state.siteAllowed = isCurrentSiteAllowed();
@@ -206,10 +244,11 @@
 
   function pauseAssistantUi() {
     clearTimeout(state.checkTimer);
+    clearInlineStatus();
+    cancelActiveInlineCheck();
     cancelBadgePlacement();
     state.requestId += 1;
     state.inlineBusy = false;
-    state.pendingInlineCheck = false;
     hideButton();
     clearInlineIssues();
     hidePageNotice();
@@ -224,6 +263,7 @@
     const editorChanged = state.editor !== editor;
     state.editor = editor;
     if (editorChanged) {
+      cancelActiveInlineCheck();
       cancelBadgePlacement();
       clearInlineIssues();
     }
@@ -251,10 +291,15 @@
       }
 
       cancelBadgePlacement();
+      cancelActiveInlineCheck();
     }, 0);
   }
 
   function handleInput(event) {
+    if (state.isComposing || event.isComposing) {
+      return;
+    }
+
     const editor = findEditor(event.target);
     if (!editor) {
       return;
@@ -273,6 +318,7 @@
     if (!editorHasText(editor)) {
       clearInlineIssues();
       cancelBadgePlacement();
+      cancelActiveInlineCheck();
       return;
     }
     if (state.suppressNextInputClear) {
@@ -283,9 +329,27 @@
       return;
     }
     hideBubble();
-    clearInlineIssues();
+    clearInlineIssuesInCurrentSegment(editor);
     scheduleBadgePlacement();
-    scheduleInlineCheck();
+    scheduleInlineCheck(event);
+  }
+
+  function handleCompositionStart() {
+    state.isComposing = true;
+    clearTimeout(state.checkTimer);
+    cancelActiveInlineCheck();
+  }
+
+  function handleCompositionEnd(event) {
+    state.isComposing = false;
+    const editor = findEditor(event.target);
+    if (!editor || !assistantActive() || !editorHasText(editor)) {
+      return;
+    }
+
+    state.editor = editor;
+    scheduleBadgePlacement();
+    scheduleInlineCheck(event);
   }
 
   function handleOutsidePointer(event) {
@@ -409,6 +473,10 @@
 
   function normalizeSiteAccessMode(value) {
     return ["all", "blocklist", "allowlist"].includes(value) ? value : "all";
+  }
+
+  function normalizeApiProvider(value) {
+    return ["qwen", "gemini", "external"].includes(value) ? value : "qwen";
   }
 
   function isCurrentSiteAllowed() {
@@ -541,14 +609,40 @@
     hideButton();
   }
 
-  function scheduleInlineCheck() {
+  function scheduleInlineCheck(event) {
     if (!assistantActive() || !editorHasText(state.editor)) {
       clearInlineIssues();
       cancelBadgePlacement();
+      cancelActiveInlineCheck();
       return;
     }
+
     clearTimeout(state.checkTimer);
-    state.checkTimer = setTimeout(() => runCheck("grammar", { inline: true }), AUTO_CHECK_DELAY);
+    state.checkTimer = setTimeout(
+      () => runCheck("grammar", { inline: true }),
+      getInlineCheckDelay(event)
+    );
+  }
+
+  function getInlineCheckDelay(event) {
+    if (!event) {
+      return AUTO_CHECK_DELAY;
+    }
+
+    if (String(event.inputType || "").startsWith("insertFromPaste")) {
+      return INLINE_PASTE_CHECK_DELAY;
+    }
+
+    const data = typeof event.data === "string" ? event.data : "";
+    if (!data) {
+      return AUTO_CHECK_DELAY;
+    }
+
+    if (/[\s.!?,;:)]/.test(data)) {
+      return INLINE_FAST_CHECK_DELAY;
+    }
+
+    return INLINE_WORD_CHECK_DELAY;
   }
 
   async function runCheck(mode, options = {}) {
@@ -557,6 +651,7 @@
     }
     const inline = Boolean(options.inline);
     const read = inline ? readInlineEditorText(state.editor) : readEditorText(state.editor);
+    const scope = inline ? "inline" : "panel";
 
     if (!read.text.trim()) {
       if (!inline) {
@@ -564,26 +659,25 @@
         setStatus("No text found in the active editor.");
         renderEmpty();
       }
-      clearInlineIssues();
+      if (inline) {
+        cancelActiveInlineCheck();
+      } else {
+        clearInlineIssues();
+      }
       return;
     }
 
-    if (inline && read.text.length > INLINE_TEXT_LIMIT) {
-      clearInlineIssues();
+    if (inline && read.text.trim().length < INLINE_MIN_TEXT_LENGTH) {
       return;
     }
 
-    if (inline && read.fullText === state.lastCheckedText) {
-      refreshInlineUi();
-      return;
-    }
+    const requestId = ++state.requestId;
+    const cacheKey = getCheckCacheKey(mode, read.text);
 
     if (inline) {
-      if (state.inlineBusy) {
-        state.pendingInlineCheck = true;
-        return;
-      }
       state.inlineBusy = true;
+      state.activeInlineRequestId = requestId;
+      startInlineStatus(requestId);
     } else {
       if (state.busy) {
         return;
@@ -595,13 +689,12 @@
       renderLoading();
     }
 
-    const requestId = ++state.requestId;
-    const cacheKey = `${mode}:${read.text}`;
-
     if (inline && state.checkCache.has(cacheKey)) {
-      state.lastCheckedText = read.fullText || read.text;
+      state.lastInlineCheckKey = cacheKey;
       applyInlineResult(state.checkCache.get(cacheKey), read);
+      clearInlineStatus();
       state.inlineBusy = false;
+      state.activeInlineRequestId = 0;
       return;
     }
 
@@ -611,11 +704,14 @@
         payload: {
           text: read.text,
           mode,
-          pageUrl: location.href
+          pageUrl: location.href,
+          scope,
+          requestId,
+          baseOffset: read.baseOffset || 0
         }
       });
 
-      if (requestId !== state.requestId && inline) {
+      if (inline && requestId !== state.activeInlineRequestId) {
         return;
       }
 
@@ -626,11 +722,10 @@
       if (inline) {
         const current = readFullEditorText(state.editor);
         if (current.text !== read.fullText) {
-          state.pendingInlineCheck = true;
           return;
         }
         rememberCheck(cacheKey, response.data);
-        state.lastCheckedText = read.fullText || read.text;
+        state.lastInlineCheckKey = cacheKey;
         applyInlineResult(response.data, read);
       } else {
         state.lastCheckedText = read.text;
@@ -639,9 +734,11 @@
         setStatus("Ready.");
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = normalizeRuntimeError(error instanceof Error ? error.message : String(error));
       if (inline) {
-        clearInlineIssues();
+        if (requestId !== state.activeInlineRequestId || isCanceledInlineError(message)) {
+          return;
+        }
         showPageNotice(normalizePageError(message));
       } else {
         renderError(message);
@@ -649,11 +746,10 @@
       }
     } finally {
       if (inline) {
-        state.inlineBusy = false;
-        if (state.pendingInlineCheck) {
-          state.pendingInlineCheck = false;
-          clearTimeout(state.checkTimer);
-          state.checkTimer = setTimeout(() => runCheck("grammar", { inline: true }), 80);
+        if (requestId === state.activeInlineRequestId) {
+          state.inlineBusy = false;
+          state.activeInlineRequestId = 0;
+          clearInlineStatus();
         }
       } else {
         state.busy = false;
@@ -667,6 +763,19 @@
       const firstKey = state.checkCache.keys().next().value;
       state.checkCache.delete(firstKey);
     }
+  }
+
+  function getCheckCacheKey(mode, text) {
+    return [
+      normalizeApiProvider(state.apiProvider),
+      mode || "grammar",
+      state.language || "en",
+      normalizeCacheText(text)
+    ].join(":");
+  }
+
+  function normalizeCacheText(text) {
+    return String(text || "");
   }
 
   function readFullEditorText(editor) {
@@ -704,22 +813,12 @@
       return { ...fullRead, fullText: "", baseOffset: 0 };
     }
 
-    if (text.length <= INLINE_TEXT_LIMIT) {
-      return {
-        ...fullRead,
-        text,
-        fullText: text,
-        baseOffset: 0,
-        start: 0,
-        end: text.length
-      };
-    }
-
     const caret = getCaretOffset(editor);
     const segment = getActiveSentenceSegment(text, Number.isInteger(caret) ? caret : text.length);
 
     return {
       ...fullRead,
+      scope: "inline",
       text: segment.text,
       fullText: text,
       baseOffset: segment.start,
@@ -797,13 +896,23 @@
     const issues = Array.isArray(data?.issues) ? data.issues : [];
     const baseOffset = Number.isInteger(read.baseOffset) ? read.baseOffset : 0;
     const fullText = read.fullText || read.text;
-    state.inlineIssues = issues
+    const nextIssues = issues
       .map((issue) => ({
         ...issue,
         start: issue.start + baseOffset,
         end: issue.end + baseOffset
       }))
       .filter((issue) => issue.end <= fullText.length && issue.end > issue.start);
+
+    if (read.scope === "inline") {
+      const preserved = state.inlineIssues.filter(
+        (issue) => issue.end <= fullText.length && !rangesOverlap(issue.start, issue.end, read.start, read.end)
+      );
+      state.inlineIssues = [...preserved, ...nextIssues].sort((a, b) => a.start - b.start);
+    } else {
+      state.inlineIssues = nextIssues;
+    }
+
     state.inlineText = fullText;
     renderInlineOverlay(fullText, state.inlineIssues);
     renderIssueTray(state.inlineIssues);
@@ -820,6 +929,38 @@
     hideBubble();
     hideOverlay();
     hideIssueTray();
+  }
+
+  function clearInlineIssuesInCurrentSegment(editor) {
+    if (!state.inlineIssues.length) {
+      hideOverlay();
+      hideIssueTray();
+      return;
+    }
+
+    const read = readInlineEditorText(editor);
+    const fullText = read.fullText || read.text;
+    const lengthChanged = state.inlineText && state.inlineText.length !== fullText.length;
+    const preserved = state.inlineIssues.filter(
+      (issue) =>
+        issue.end <= fullText.length &&
+        !rangesOverlap(issue.start, issue.end, read.start, read.end) &&
+        (!lengthChanged || issue.end <= read.start)
+    );
+
+    if (!preserved.length) {
+      clearInlineIssues();
+      return;
+    }
+
+    state.inlineIssues = preserved;
+    state.inlineText = fullText;
+    renderInlineOverlay(fullText, preserved);
+    renderIssueTray(preserved);
+  }
+
+  function rangesOverlap(startA, endA, startB, endB) {
+    return startA < endB && endA > startB;
   }
 
   function renderInlineOverlay(text, issues) {
@@ -942,6 +1083,10 @@
   }
 
   function normalizePageError(message) {
+    if (isExtensionContextError(message)) {
+      return "Extension was updated. Refresh this page, then try again.";
+    }
+
     if (/api key|401|403|unauthorized|invalid api/i.test(message)) {
       return "Setup needed: open the extension popup and update your API key.";
     }
@@ -955,6 +1100,90 @@
     }
 
     return "";
+  }
+
+  function normalizeRuntimeError(message) {
+    if (isExtensionContextError(message)) {
+      return "Extension was updated or reloaded. Refresh this page, then try again.";
+    }
+
+    return message;
+  }
+
+  function isExtensionContextError(message) {
+    return /extension context invalidated|receiving end does not exist|extension runtime is not available|context invalidated/i.test(
+      message || ""
+    );
+  }
+
+  function isCanceledInlineError(message) {
+    return /aborted|canceled|cancelled|replaced by newer typing/i.test(message || "");
+  }
+
+  function startInlineStatus(requestId) {
+    clearInlineStatus();
+    state.badgeReady = true;
+    placeButton();
+
+    state.inlineStatusTimer = setTimeout(() => {
+      if (requestId !== state.activeInlineRequestId) {
+        return;
+      }
+
+      setButtonState("checking", "Checking suggestions...");
+      if (state.panel?.dataset.open === "true") {
+        setStatus("Checking...");
+      }
+    }, INLINE_STATUS_DELAY);
+
+    state.inlineSlowTimer = setTimeout(() => {
+      if (requestId !== state.activeInlineRequestId) {
+        return;
+      }
+
+      setButtonState("slow", "Still checking suggestions...");
+      if (state.panel?.dataset.open === "true") {
+        setStatus("Still checking...");
+      }
+    }, INLINE_SLOW_STATUS_DELAY);
+  }
+
+  function clearInlineStatus() {
+    clearTimeout(state.inlineStatusTimer);
+    clearTimeout(state.inlineSlowTimer);
+    state.inlineStatusTimer = null;
+    state.inlineSlowTimer = null;
+    setButtonState("", "Check text");
+  }
+
+  function setButtonState(value, title) {
+    if (!state.button) {
+      return;
+    }
+
+    if (value) {
+      state.button.dataset.state = value;
+      state.button.dataset.label = "...";
+    } else {
+      delete state.button.dataset.state;
+      delete state.button.dataset.label;
+    }
+    state.button.title = title;
+  }
+
+  function cancelActiveInlineCheck() {
+    if (!state.activeInlineRequestId) {
+      return;
+    }
+
+    const requestId = state.activeInlineRequestId;
+    state.activeInlineRequestId = 0;
+    state.inlineBusy = false;
+    clearInlineStatus();
+    sendMessage({
+      type: "shga.cancelInlineCheck",
+      payload: { requestId }
+    }).catch(() => {});
   }
 
   function refreshInlineUi() {
@@ -1508,7 +1737,7 @@
     return new Promise((resolve, reject) => {
       const runtime = globalThis.chrome?.runtime;
       if (!runtime?.sendMessage) {
-        reject(new Error("Extension runtime is not available. Reload the extension from chrome://extensions."));
+        reject(new Error("Extension runtime is not available."));
         return;
       }
 
@@ -1521,6 +1750,10 @@
         resolve(response);
       });
     });
+  }
+
+  function removeExistingAssistantUi() {
+    document.querySelectorAll(ASSISTANT_ELEMENT_SELECTOR).forEach((node) => node.remove());
   }
 
   function dispatchInput(node) {

@@ -16,11 +16,11 @@
 .shga-button {
   position: fixed;
   z-index: 2147483646;
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border: 0;
-  border-radius: 8px;
-  background: #176b5d;
+  border-radius: 9px;
+  background: #06175f;
   color: #ffffff;
   box-shadow: 0 6px 18px rgba(15, 23, 42, 0.2);
   cursor: pointer;
@@ -31,10 +31,44 @@
   font-weight: 700;
   line-height: 1;
   touch-action: manipulation;
+  overflow: hidden;
+  padding: 0;
 }
 
 .shga-button:hover {
-  background: #115549;
+  background: #06175f;
+}
+
+.shga-button[data-state="checking"] {
+  background: #1d4ed8;
+}
+
+.shga-button[data-state="slow"] {
+  background: #d97706;
+}
+
+.shga-button-icon {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.shga-button[data-state] .shga-button-icon {
+  opacity: 0.28;
+}
+
+.shga-button[data-label]::after {
+  content: attr(data-label);
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .shga-button:focus-visible,

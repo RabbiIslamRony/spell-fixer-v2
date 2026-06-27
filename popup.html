@@ -8,9 +8,12 @@
   </head>
   <body>
     <main class="shell">
-      <header>
-        <h1>Grammar Assistant</h1>
-        <p id="connectionText">Connected</p>
+      <header class="app-header">
+        <img class="app-logo" src="icons/icon-48.png" alt="" aria-hidden="true">
+        <div>
+          <h1>Grammar Assistant</h1>
+          <p id="connectionText">Connected</p>
+        </div>
       </header>
 
       <div class="status-card">
@@ -57,7 +60,7 @@
 
         <label id="apiUrlRow" class="external-only" hidden>
           External API URL
-          <input id="apiUrl" type="url" placeholder="https://self-hosted-grammar-worker.rony-sovware.workers.dev/grammar/check">
+          <input id="apiUrl" type="url" placeholder="https://your-worker.workers.dev/grammar/check">
         </label>
 
         <label>
