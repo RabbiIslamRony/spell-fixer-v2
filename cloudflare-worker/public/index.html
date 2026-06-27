@@ -19,6 +19,7 @@
       </a>
       <nav aria-label="Primary navigation">
         <a href="#demo">Demo</a>
+        <a href="#setup">Keys</a>
         <a href="#privacy">Privacy</a>
         <a class="nav-cta" href="https://github.com/RabbiIslamRony/spell-fixer-v2/releases/latest">Install</a>
       </nav>
@@ -27,10 +28,11 @@
     <main>
       <section class="hero" id="demo">
         <div class="hero-copy">
-          <p class="eyebrow">Chrome extension for faster writing</p>
+          <p class="eyebrow">Fully self-hosted Chrome grammar assistant</p>
           <h1>Fix grammar where you type.</h1>
           <p class="hero-text">
             Inline suggestions, one-click fixes, and direct Qwen or Gemini setup from the extension popup.
+            Use your own free-tier or free-quota API key with no shared backend account.
           </p>
           <div class="hero-actions" aria-label="Primary actions">
             <a class="button primary" href="https://github.com/RabbiIslamRony/spell-fixer-v2/releases/latest">
@@ -101,6 +103,49 @@
           <p>
             The Chrome extension lets users choose Qwen, Gemini, or an optional external API from the popup.
           </p>
+        </div>
+      </section>
+
+      <section class="setup-band" id="setup" aria-labelledby="selfHostedTitle">
+        <div class="setup-copy">
+          <p class="eyebrow">Self-hosted by design</p>
+          <h2 id="selfHostedTitle">Your key, your browser, your control.</h2>
+          <p>
+            Grammar Assistant does not require a shared SaaS account. Install the extension, choose a provider,
+            paste your own API key locally, and start checking text. Provider free access depends on account,
+            region, model, and current quota limits.
+          </p>
+        </div>
+
+        <div class="setup-steps" aria-label="Free API key setup">
+          <article class="setup-step">
+            <span class="step-number">1</span>
+            <h3>Gemini free tier</h3>
+            <p>
+              Open Google AI Studio, create an API key, then select Gemini in the extension popup and paste the key.
+            </p>
+            <a href="https://aistudio.google.com/app/apikey">Get Gemini API key</a>
+          </article>
+
+          <article class="setup-step">
+            <span class="step-number">2</span>
+            <h3>Qwen free quota</h3>
+            <p>
+              Activate Alibaba Cloud Model Studio, use the international/Singapore free quota when available, then
+              create a Model Studio API key and paste it under Qwen.
+            </p>
+            <a href="https://www.alibabacloud.com/help/en/model-studio/get-api-key">Get Qwen API key</a>
+          </article>
+
+          <article class="setup-step">
+            <span class="step-number">3</span>
+            <h3>Use it safely</h3>
+            <p>
+              Keep keys private, start with free quota limits, and delete or rotate a key if it is exposed.
+              Never publish API keys in GitHub, screenshots, or ZIP files.
+            </p>
+            <a href="https://www.alibabacloud.com/help/en/model-studio/new-free-quota">Check Qwen free quota</a>
+          </article>
         </div>
       </section>
     </main>

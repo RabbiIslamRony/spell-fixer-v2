@@ -2,6 +2,9 @@
 
 Chrome grammar assistant with direct Qwen/Gemini API key support. A user can choose `Qwen` or `Gemini` in the popup, paste that provider API key, and use the extension without Cloudflare or source-code edits.
 
+[Live Preview](https://self-hosted-grammar-worker.rony-sovware.workers.dev/) |
+[Latest Extension Release](https://github.com/RabbiIslamRony/spell-fixer-v2/releases/latest)
+
 For end-user setup, see [USER_SETUP.md](./USER_SETUP.md).
 
 ## Build ZIP
@@ -24,7 +27,15 @@ The ZIP includes only Chrome runtime files and `USER_SETUP.md`. It excludes deve
 
 The public landing page lives in `cloudflare-worker/public/` and is served by the Cloudflare Worker static assets binding. It includes a browser-only demo, so visitor demo text is not sent to Qwen, Gemini, or the Worker API.
 
+Public preview:
+
+```text
+https://self-hosted-grammar-worker.rony-sovware.workers.dev/
+```
+
 The landing page links to GitHub Releases for installation. The extension ZIP is not copied into the Cloudflare static assets folder.
+
+GitHub Actions can deploy the landing page and Worker from `main` using `.github/workflows/deploy-cloudflare-worker.yml`. Add repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` before relying on automatic deploys.
 
 ## Load in Chrome
 

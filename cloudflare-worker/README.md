@@ -2,6 +2,12 @@
 
 This Worker serves the public landing page and receives optional API requests from the Chrome extension. API requests can check your extension API key, then call an OpenAI-compatible chat completions API.
 
+Live landing page:
+
+```text
+https://self-hosted-grammar-worker.rony-sovware.workers.dev/
+```
+
 ## Files
 
 ```text
