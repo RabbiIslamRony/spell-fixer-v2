@@ -1,5 +1,6 @@
 const DEFAULT_SETTINGS = {
-  apiUrl: "https://self-hosted-grammar-worker.rony-sovware.workers.dev/grammar/check",
+  apiProvider: "qwen",
+  apiUrl: "",
   apiKey: "",
   extensionEnabled: true,
   language: "en",
@@ -11,6 +12,7 @@ const DEFAULT_SETTINGS = {
 };
 
 const fields = {
+  apiProvider: document.querySelector("#apiProvider"),
   apiUrl: document.querySelector("#apiUrl"),
   apiKey: document.querySelector("#apiKey"),
   extensionEnabled: document.querySelector("#extensionEnabled"),
@@ -27,6 +29,7 @@ const statusDot = document.querySelector(".status-dot");
 const setupNotice = document.querySelector("#setupNotice");
 const setupButton = document.querySelector("#setupKey");
 const advancedPanel = document.querySelector("#advanced");
+const apiUrlRow = document.querySelector("#apiUrlRow");
 const extensionApi = getExtensionApi();
 
 loadSettings();
@@ -36,6 +39,9 @@ document.querySelector("#test").addEventListener("click", testApi);
 document.querySelector("#reset").addEventListener("click", resetSettings);
 document.querySelector("#options").addEventListener("click", openOptions);
 setupButton.addEventListener("click", openApiSetup);
+fields.apiProvider.addEventListener("change", () => {
+  updateProviderUi(readForm());
+});
 fields.extensionEnabled.addEventListener("change", async () => {
   await saveSettings();
   updateStatusCard(readForm());
@@ -77,9 +83,10 @@ async function testApi() {
     return;
   }
 
-  if (!readForm().apiKey) {
+  const settings = readForm();
+  if (!settings.apiKey) {
     openApiSetup();
-    setStatus("Add your Worker API key first.");
+    setStatus(`Add your ${getProviderLabel(settings.apiProvider)} API key first.`);
     return;
   }
 
@@ -100,7 +107,7 @@ async function testApi() {
       throw new Error(response?.error || "The API returned an error.");
     }
 
-    setStatus(response.data?.correctedText ? "API test passed." : "API replied, but no correctedText was returned.");
+  setStatus(response.data?.correctedText ? `${getProviderLabel(settings.apiProvider)} test passed.` : "API replied, but no correctedText was returned.");
   } catch (error) {
     setStatus(error instanceof Error ? error.message : String(error));
   }
@@ -116,10 +123,11 @@ async function resetSettings() {
     extensionApi.storage.set(DEFAULT_SETTINGS, resolve);
   });
   loadSettings();
-  setStatus("Defaults restored. Add your Worker API key before testing.");
+  setStatus("Defaults restored. Add your provider API key before testing.");
 }
 
 function applySettingsToForm(settings) {
+  fields.apiProvider.value = normalizeApiProvider(settings.apiProvider || inferProviderFromKey(settings.apiKey));
   fields.apiUrl.value = settings.apiUrl || DEFAULT_SETTINGS.apiUrl;
   fields.apiKey.value = settings.apiKey || DEFAULT_SETTINGS.apiKey;
   fields.extensionEnabled.checked = settings.extensionEnabled !== false;
@@ -128,10 +136,12 @@ function applySettingsToForm(settings) {
   fields.includePageUrl.checked = Boolean(settings.includePageUrl);
   fields.siteAccessMode.value = normalizeSiteAccessMode(settings.siteAccessMode);
   fields.siteAccessList.value = settings.siteAccessList || "";
+  updateProviderUi(readForm());
 }
 
 function readForm() {
   return {
+    apiProvider: normalizeApiProvider(fields.apiProvider.value),
     apiUrl: fields.apiUrl.value.trim(),
     apiKey: fields.apiKey.value.trim(),
     extensionEnabled: fields.extensionEnabled.checked,
@@ -146,6 +156,33 @@ function readForm() {
 
 function normalizeSiteAccessMode(value) {
   return ["all", "blocklist", "allowlist"].includes(value) ? value : DEFAULT_SETTINGS.siteAccessMode;
+}
+
+function normalizeApiProvider(value) {
+  return ["qwen", "gemini", "external"].includes(value) ? value : DEFAULT_SETTINGS.apiProvider;
+}
+
+function inferProviderFromKey(value) {
+  return String(value || "").trim().startsWith("sk-ws-") ? "qwen" : DEFAULT_SETTINGS.apiProvider;
+}
+
+function getProviderLabel(provider) {
+  return {
+    qwen: "Qwen",
+    gemini: "Gemini",
+    external: "External API"
+  }[normalizeApiProvider(provider)];
+}
+
+function updateProviderUi(settings) {
+  const provider = normalizeApiProvider(settings.apiProvider);
+  apiUrlRow.hidden = provider !== "external";
+  fields.apiKey.placeholder =
+    provider === "gemini"
+      ? "Gemini API key"
+      : provider === "qwen"
+        ? "Qwen DashScope API key"
+        : "External API access token";
 }
 
 function updateStatusCard(settings) {

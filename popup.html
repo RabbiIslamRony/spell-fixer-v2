@@ -24,7 +24,7 @@
       <div id="setupNotice" class="setup-card" hidden>
         <div>
           <strong>Connect API key</strong>
-          <span>Paste your Worker token once. No source edit needed.</span>
+          <span>Paste your Gemini or Qwen key once. No source edit needed.</span>
         </div>
         <button id="setupKey" type="button">Setup</button>
       </div>
@@ -47,13 +47,22 @@
         <summary>Advanced</summary>
 
         <label>
-          API URL
+          AI provider
+          <select id="apiProvider">
+            <option value="qwen">Qwen</option>
+            <option value="gemini">Gemini</option>
+            <option value="external">External API</option>
+          </select>
+        </label>
+
+        <label id="apiUrlRow" class="external-only" hidden>
+          External API URL
           <input id="apiUrl" type="url" placeholder="https://self-hosted-grammar-worker.rony-sovware.workers.dev/grammar/check">
         </label>
 
         <label>
           API key
-          <input id="apiKey" type="password" placeholder="Worker access token">
+          <input id="apiKey" type="password" placeholder="Qwen DashScope API key">
         </label>
 
         <div class="grid">

@@ -252,7 +252,7 @@ button {
 
 .advanced {
   border-top: 1px solid rgba(20, 33, 61, 0.1);
-  padding-top: 10px;
+  padding-top: 12px;
 }
 
 .advanced summary {
@@ -264,11 +264,34 @@ button {
 
 .advanced[open] {
   display: grid;
-  gap: 12px;
+  gap: 16px;
 }
 
 .advanced[open] summary {
-  margin-bottom: 2px;
+  margin-bottom: 4px;
+}
+
+.advanced > label {
+  gap: 8px;
+}
+
+.advanced .grid {
+  gap: 14px;
+}
+
+.advanced .checkbox {
+  gap: 8px;
+  min-height: 24px;
+  margin-top: -2px;
+}
+
+.advanced .wide {
+  min-height: 40px;
+  margin-top: 2px;
+}
+
+.external-only[hidden] {
+  display: none;
 }
 
 .status {
