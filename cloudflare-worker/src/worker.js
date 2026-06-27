@@ -43,64 +43,64 @@ export default {
 };
 
 async function handleGrammarCheck(request, env, ctx) {
-    const authError = validateApiKey(request, env);
-    if (authError) {
-      return json({ error: authError }, 401);
-    }
+  const authError = validateApiKey(request, env);
+  if (authError) {
+    return json({ error: authError }, 401);
+  }
 
-    let payload;
-    try {
-      payload = await request.json();
-    } catch {
-      return json({ error: "Invalid JSON body" }, 400);
-    }
+  let payload;
+  try {
+    payload = await request.json();
+  } catch {
+    return json({ error: "Invalid JSON body" }, 400);
+  }
 
-    const text = String(payload.text || "").trim();
-    if (!text) {
-      return json({ error: "Missing text" }, 400);
-    }
+  const text = String(payload.text || "").trim();
+  if (!text) {
+    return json({ error: "Missing text" }, 400);
+  }
 
-    try {
-      const mode = safeString(payload.mode, "grammar");
-      const language = safeString(payload.language, "en");
-      const pageUrl = safeString(payload.pageUrl, "");
-      const result = await checkText({
-        text,
-        mode,
-        language,
-        pageUrl,
-        env
-      });
+  try {
+    const mode = safeString(payload.mode, "grammar");
+    const language = safeString(payload.language, "en");
+    const pageUrl = safeString(payload.pageUrl, "");
+    const result = await checkText({
+      text,
+      mode,
+      language,
+      pageUrl,
+      env
+    });
 
-      ctx.waitUntil(recordGrammarCheck(env, {
-        mode,
-        language,
-        pageUrl,
-        inputText: text,
-        correctedText: result.correctedText,
-        suggestionCount: Math.max(result.issues?.length || 0, result.suggestions?.length || 0),
-        success: true,
-        error: ""
-      }));
+    ctx.waitUntil(recordGrammarCheck(env, {
+      mode,
+      language,
+      pageUrl,
+      inputText: text,
+      correctedText: result.correctedText,
+      suggestionCount: Math.max(result.issues?.length || 0, result.suggestions?.length || 0),
+      success: true,
+      error: ""
+    }));
 
-      return json(result);
-    } catch (error) {
-      ctx.waitUntil(recordGrammarCheck(env, {
-        mode: safeString(payload.mode, "grammar"),
-        language: safeString(payload.language, "en"),
-        pageUrl: safeString(payload.pageUrl, ""),
-        inputText: text,
-        correctedText: "",
-        suggestionCount: 0,
-        success: false,
-        error: error instanceof Error ? error.message : "Grammar check failed"
-      }));
+    return json(result);
+  } catch (error) {
+    ctx.waitUntil(recordGrammarCheck(env, {
+      mode: safeString(payload.mode, "grammar"),
+      language: safeString(payload.language, "en"),
+      pageUrl: safeString(payload.pageUrl, ""),
+      inputText: text,
+      correctedText: "",
+      suggestionCount: 0,
+      success: false,
+      error: error instanceof Error ? error.message : "Grammar check failed"
+    }));
 
-      return json(
-        { error: error instanceof Error ? error.message : "Grammar check failed" },
-        500
-      );
-    }
+    return json(
+      { error: error instanceof Error ? error.message : "Grammar check failed" },
+      500
+    );
+  }
 }
 
 async function getQaChecks(url, env) {
