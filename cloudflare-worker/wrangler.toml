@@ -4,6 +4,10 @@ compatibility_date = "2026-05-14"
 workers_dev = true
 preview_urls = false
 
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
 [vars]
 AI_MODEL = "gpt-4.1-mini"
 AI_API_URL = "https://api.openai.com/v1/chat/completions"

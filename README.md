@@ -20,6 +20,12 @@ dist/grammar-assistant-extension-v0.3.8.zip
 
 The ZIP includes only Chrome runtime files and `USER_SETUP.md`. It excludes development-only items such as `.git`, `cloudflare-worker`, `server-example`, `node_modules`, `dist`, scripts, and QA docs.
 
+## Landing Page
+
+The public landing page lives in `cloudflare-worker/public/` and is served by the Cloudflare Worker static assets binding. It includes a browser-only demo, so visitor demo text is not sent to Qwen, Gemini, or the Worker API.
+
+The landing page links to GitHub Releases for installation. The extension ZIP is not copied into the Cloudflare static assets folder.
+
 ## Load in Chrome
 
 For development:

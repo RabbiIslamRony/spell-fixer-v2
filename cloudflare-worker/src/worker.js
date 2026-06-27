@@ -30,10 +30,19 @@ export default {
       return getQaChecks(url, env);
     }
 
-    if (request.method !== "POST" || url.pathname !== "/grammar/check") {
-      return json({ error: "Not found" }, 404);
+    if (request.method === "POST" && url.pathname === "/grammar/check") {
+      return handleGrammarCheck(request, env, ctx);
     }
 
+    if ((request.method === "GET" || request.method === "HEAD") && env.ASSETS) {
+      return env.ASSETS.fetch(request);
+    }
+
+    return json({ error: "Not found" }, 404);
+  }
+};
+
+async function handleGrammarCheck(request, env, ctx) {
     const authError = validateApiKey(request, env);
     if (authError) {
       return json({ error: authError }, 401);
@@ -92,8 +101,7 @@ export default {
         500
       );
     }
-  }
-};
+}
 
 async function getQaChecks(url, env) {
   if (!env.DB) {

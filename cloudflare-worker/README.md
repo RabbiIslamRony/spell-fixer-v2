@@ -1,6 +1,6 @@
 # Cloudflare Worker Backend
 
-This Worker receives requests from the Chrome extension, checks your extension API key, then calls an OpenAI-compatible chat completions API.
+This Worker serves the public landing page and receives optional API requests from the Chrome extension. API requests can check your extension API key, then call an OpenAI-compatible chat completions API.
 
 ## Files
 
@@ -8,8 +8,11 @@ This Worker receives requests from the Chrome extension, checks your extension A
 cloudflare-worker/
   package.json
   wrangler.toml
+  public/
   src/worker.js
 ```
+
+`public/` contains the static landing page. The Chrome extension ZIP is not stored there; installation links point to GitHub Releases.
 
 ## Install
 
@@ -53,12 +56,6 @@ After deploy, your extension API URL should be:
 
 ```text
 https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev/grammar/check
-```
-
-Current deployed Worker:
-
-```text
-https://self-hosted-grammar-worker.rony-sovware.workers.dev/grammar/check
 ```
 
 In the extension popup:

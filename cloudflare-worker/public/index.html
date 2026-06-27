@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Grammar Assistant is a Chrome extension with fast inline grammar suggestions powered by Qwen, Gemini, or an optional external API."
+    >
+    <title>Grammar Assistant - Chrome Writing Assistant</title>
+    <link rel="icon" href="/assets/logo-48.png">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="Grammar Assistant home">
+        <img src="/assets/logo-48.png" width="40" height="40" alt="">
+        <span>Grammar Assistant</span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="#demo">Demo</a>
+        <a href="#privacy">Privacy</a>
+        <a class="nav-cta" href="https://github.com/RabbiIslamRony/spell-fixer-v2/releases/latest">Install</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero" id="demo">
+        <div class="hero-copy">
+          <p class="eyebrow">Chrome extension for faster writing</p>
+          <h1>Fix grammar where you type.</h1>
+          <p class="hero-text">
+            Inline suggestions, one-click fixes, and direct Qwen or Gemini setup from the extension popup.
+          </p>
+          <div class="hero-actions" aria-label="Primary actions">
+            <a class="button primary" href="https://github.com/RabbiIslamRony/spell-fixer-v2/releases/latest">
+              Download extension
+            </a>
+            <button class="button secondary" id="replayHero" type="button">Replay demo</button>
+          </div>
+        </div>
+
+        <section class="demo-shell" aria-label="Live browser demo">
+          <div class="demo-toolbar">
+            <div class="toolbar-title">
+              <img src="/assets/logo-48.png" width="28" height="28" alt="">
+              <span>Live demo</span>
+            </div>
+            <div class="toolbar-status" id="demoStatus" aria-live="polite">Typing sample...</div>
+          </div>
+
+          <div class="demo-layout">
+            <div class="editor-pane">
+              <label for="demoInput">Try the editor</label>
+              <div class="editor-wrap">
+                <div class="highlight-layer" id="highlightLayer" aria-hidden="true"></div>
+                <textarea
+                  id="demoInput"
+                  spellcheck="false"
+                  autocomplete="off"
+                  aria-describedby="demoHelp"
+                ></textarea>
+                <div class="demo-badge" aria-hidden="true">
+                  <img src="/assets/logo-48.png" width="34" height="34" alt="">
+                </div>
+              </div>
+              <p id="demoHelp">Type text like "This are" or "I has" to see suggestions instantly.</p>
+            </div>
+
+            <aside class="suggestion-pane" aria-label="Suggestions">
+              <div class="suggestion-header">
+                <span class="issue-count" id="issueCount">0</span>
+                <span>suggestions</span>
+              </div>
+              <div class="suggestion-list" id="suggestionList"></div>
+              <div class="demo-actions">
+                <button class="button primary compact" id="fixAll" type="button">Fix all</button>
+                <button class="button secondary compact" id="resetDemo" type="button">Reset</button>
+              </div>
+            </aside>
+          </div>
+        </section>
+      </section>
+
+      <section class="info-band" id="privacy">
+        <div>
+          <h2>Public demo, private by default.</h2>
+          <p>
+            This page runs a deterministic browser demo only. It does not send demo text to Qwen, Gemini, or the
+            Cloudflare Worker.
+          </p>
+        </div>
+        <div>
+          <h2>No ZIP in the landing page.</h2>
+          <p>
+            Installation files stay in GitHub Releases, keeping the Cloudflare site lightweight and easy to deploy.
+          </p>
+        </div>
+        <div>
+          <h2>Bring your own provider key.</h2>
+          <p>
+            The Chrome extension lets users choose Qwen, Gemini, or an optional external API from the popup.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <script src="/demo.js" defer></script>
+  </body>
+</html>
