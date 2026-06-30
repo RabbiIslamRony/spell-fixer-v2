@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="Privacy policy for Grammar Assistant, a self-hosted Chrome grammar extension."
+    >
+    <title>Privacy Policy - Grammar Assistant</title>
+    <link rel="icon" href="/assets/logo-48.png">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="Grammar Assistant home">
+        <img src="/assets/logo-48.png" width="40" height="40" alt="">
+        <span>Grammar Assistant</span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="/">Demo</a>
+        <a href="/#setup">Keys</a>
+        <a href="/privacy">Privacy</a>
+        <a class="nav-cta" href="https://github.com/RabbiIslamRony/spell-fixer-v2/releases/latest">Install</a>
+      </nav>
+    </header>
+
+    <main class="policy-page">
+      <section class="policy-hero">
+        <p class="eyebrow">Privacy policy</p>
+        <h1>Grammar Assistant keeps setup local and user controlled.</h1>
+        <p>
+          This policy explains what the Chrome extension stores, what text it sends for grammar checking, and how the
+          public landing page works.
+        </p>
+      </section>
+
+      <section class="policy-content" aria-label="Privacy details">
+        <article>
+          <h2>Data stored by the extension</h2>
+          <p>
+            The extension stores settings, selected provider, site access preferences, and user-provided API keys in
+            Chrome local extension storage on the user's device. API keys are not stored with Chrome sync.
+          </p>
+        </article>
+
+        <article>
+          <h2>Text sent for checking</h2>
+          <p>
+            When the extension is enabled, selected text or active editor text may be sent to the provider chosen by
+            the user, such as Gemini, Qwen, or a custom external API. Page URL is sent only when the user turns on the
+            Include page URL setting.
+          </p>
+        </article>
+
+        <article>
+          <h2>Third-party providers</h2>
+          <p>
+            Grammar Assistant does not provide a shared AI account. Users bring their own provider API key, and provider
+            requests are subject to that provider's terms, privacy practices, quota, and billing rules.
+          </p>
+        </article>
+
+        <article>
+          <h2>Landing page demo</h2>
+          <p>
+            The public landing page demo is deterministic and runs in the browser. Demo text is not sent to Gemini,
+            Qwen, or the Worker API.
+          </p>
+        </article>
+
+        <article>
+          <h2>Analytics, ads, and sale of data</h2>
+          <p>
+            The extension does not include advertising, affiliate tracking, analytics SDKs, or sale of user data.
+          </p>
+        </article>
+
+        <article>
+          <h2>User control</h2>
+          <p>
+            Users can disable the extension, clear API keys, restrict site access, or uninstall the extension at any
+            time. API keys should be rotated with the provider if they are accidentally exposed.
+          </p>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

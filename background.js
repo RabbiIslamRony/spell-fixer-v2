@@ -9,7 +9,7 @@ const DEFAULT_SETTINGS = {
   siteAccessMode: "all",
   siteAccessList: "",
   timeoutMs: 30000,
-  settingsVersion: 6
+  settingsVersion: 7
 };
 
 const RESPONSE_CACHE_LIMIT = 80;
@@ -48,23 +48,7 @@ const AI_PROVIDERS = {
 };
 
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.sync.get(null, (items) => {
-    chrome.storage.sync.set({
-      ...DEFAULT_SETTINGS,
-      ...items,
-      apiProvider: normalizeApiProvider(items.apiProvider || inferProviderFromKey(items.apiKey)),
-      apiUrl: typeof items.apiUrl === "string" ? items.apiUrl : DEFAULT_SETTINGS.apiUrl,
-      apiKey: typeof items.apiKey === "string" ? items.apiKey : DEFAULT_SETTINGS.apiKey,
-      extensionEnabled:
-        typeof items.extensionEnabled === "boolean" ? items.extensionEnabled : DEFAULT_SETTINGS.extensionEnabled,
-      includePageUrl:
-        typeof items.includePageUrl === "boolean" ? items.includePageUrl : DEFAULT_SETTINGS.includePageUrl,
-      siteAccessMode: normalizeSiteAccessMode(items.siteAccessMode),
-      siteAccessList: typeof items.siteAccessList === "string" ? items.siteAccessList : DEFAULT_SETTINGS.siteAccessList,
-      settingsVersion: DEFAULT_SETTINGS.settingsVersion
-    });
-  });
-  injectContentScriptsIntoOpenTabs();
+  migrateSettingsToLocalStorage();
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -680,48 +664,47 @@ function getLocalValue(key) {
   });
 }
 
-function injectContentScriptsIntoOpenTabs() {
-  if (!chrome.tabs?.query || !chrome.scripting?.executeScript || !chrome.scripting?.insertCSS) {
+function getSettings() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(DEFAULT_SETTINGS, resolve);
+  });
+}
+
+function migrateSettingsToLocalStorage() {
+  if (!chrome.storage?.local) {
     return;
   }
 
-  chrome.tabs.query({ url: ["http://*/*", "https://*/*"] }, (tabs = []) => {
-    if (chrome.runtime.lastError) {
-      return;
-    }
-
-    tabs.forEach((tab) => {
-      if (!tab.id) {
-        return;
-      }
-
-      chrome.scripting.insertCSS(
-        {
-          target: { tabId: tab.id },
-          files: ["content.css"]
-        },
-        () => {
-          void chrome.runtime.lastError;
-        }
-      );
-
-      chrome.scripting.executeScript(
-        {
-          target: { tabId: tab.id },
-          files: ["content.js"]
-        },
-        () => {
-          void chrome.runtime.lastError;
-        }
-      );
+  chrome.storage.sync.get(null, (syncItems = {}) => {
+    chrome.storage.local.get(null, (localItems = {}) => {
+      const items = {
+        ...DEFAULT_SETTINGS,
+        ...syncItems,
+        ...localItems
+      };
+      chrome.storage.local.set(normalizeStoredSettings(items), () => {
+        chrome.storage.sync.remove(Object.keys(DEFAULT_SETTINGS));
+      });
     });
   });
 }
 
-function getSettings() {
-  return new Promise((resolve) => {
-    chrome.storage.sync.get(DEFAULT_SETTINGS, resolve);
-  });
+function normalizeStoredSettings(items) {
+  return {
+    ...DEFAULT_SETTINGS,
+    ...items,
+    apiProvider: normalizeApiProvider(items.apiProvider || inferProviderFromKey(items.apiKey)),
+    apiUrl: typeof items.apiUrl === "string" ? items.apiUrl : DEFAULT_SETTINGS.apiUrl,
+    apiKey: typeof items.apiKey === "string" ? items.apiKey : DEFAULT_SETTINGS.apiKey,
+    extensionEnabled:
+      typeof items.extensionEnabled === "boolean" ? items.extensionEnabled : DEFAULT_SETTINGS.extensionEnabled,
+    includePageUrl:
+      typeof items.includePageUrl === "boolean" ? items.includePageUrl : DEFAULT_SETTINGS.includePageUrl,
+    siteAccessMode: normalizeSiteAccessMode(items.siteAccessMode),
+    siteAccessList: typeof items.siteAccessList === "string" ? items.siteAccessList : DEFAULT_SETTINGS.siteAccessList,
+    timeoutMs: Number(items.timeoutMs) || DEFAULT_SETTINGS.timeoutMs,
+    settingsVersion: DEFAULT_SETTINGS.settingsVersion
+  };
 }
 
 function parseJson(value) {

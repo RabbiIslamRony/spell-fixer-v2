@@ -47,5 +47,7 @@ Use this before packaging or selling the extension.
 
 - No real API keys are committed.
 - `manifest.json` includes `icons` and `action.default_icon`.
-- Privacy notes explain what text is sent and what QA metadata is stored.
-- Permission justification is ready for `<all_urls>`.
+- Privacy policy is published at `https://self-hosted-grammar-worker.rony-sovware.workers.dev/privacy`.
+- Privacy notes explain what text is sent, that API keys use local extension storage, and what QA metadata is stored.
+- Permission justification is ready for content script access on supported websites.
+- `host_permissions` are limited to Gemini and DashScope provider endpoints.

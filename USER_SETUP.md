@@ -4,7 +4,7 @@ This guide is for users installing the packaged Chrome extension.
 
 ## Install From ZIP
 
-1. Unzip `grammar-assistant-extension-v0.3.8.zip`.
+1. Unzip `grammar-assistant-extension-v0.3.9.zip`.
 2. Open Chrome and go to `chrome://extensions`.
 3. Turn on `Developer mode`.
 4. Click `Load unpacked`.
@@ -26,6 +26,8 @@ Use:
 - `External API` only if you have a custom grammar API URL.
 
 For normal Qwen/Gemini use, leave `External API URL` blank. It is only needed when `External API` is selected.
+
+API keys are saved only in Chrome local extension storage on this device. They are not saved with Chrome sync.
 
 ## Use The Extension
 

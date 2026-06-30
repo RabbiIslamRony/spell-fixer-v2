@@ -31,7 +31,7 @@
     extensionEnabled: true,
     siteAccessMode: "all",
     siteAccessList: "",
-    settingsVersion: 5
+    settingsVersion: 7
   };
 
   const state = {
@@ -204,9 +204,9 @@
   }
 
   function loadContentSettings() {
-    chrome.storage.sync.get(CONTENT_DEFAULT_SETTINGS, applyContentSettings);
+    chrome.storage.local.get(CONTENT_DEFAULT_SETTINGS, applyContentSettings);
     chrome.storage.onChanged.addListener((changes, areaName) => {
-      if (areaName !== "sync") {
+      if (areaName !== "local") {
         return;
       }
 
@@ -218,7 +218,7 @@
         changes.siteAccessList ||
         changes.settingsVersion
       ) {
-        chrome.storage.sync.get(CONTENT_DEFAULT_SETTINGS, applyContentSettings);
+        chrome.storage.local.get(CONTENT_DEFAULT_SETTINGS, applyContentSettings);
       }
     });
   }

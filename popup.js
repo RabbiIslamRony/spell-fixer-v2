@@ -8,7 +8,7 @@ const DEFAULT_SETTINGS = {
   includePageUrl: false,
   siteAccessMode: "all",
   siteAccessList: "",
-  settingsVersion: 5
+  settingsVersion: 7
 };
 
 const fields = {
@@ -61,13 +61,18 @@ function loadSettings() {
   });
 }
 
-function saveSettings() {
+async function saveSettings() {
   if (!extensionApi.storage) {
     setStatus("Settings can only be saved inside the installed extension.");
     return Promise.resolve(false);
   }
 
   const settings = readForm();
+  const hasExternalPermission = await ensureExternalApiPermission(settings);
+  if (!hasExternalPermission) {
+    return false;
+  }
+
   return new Promise((resolve) => {
     extensionApi.storage.set(settings, () => {
       updateStatusCard(settings);
@@ -90,7 +95,10 @@ async function testApi() {
     return;
   }
 
-  await saveSettings();
+  const saved = await saveSettings();
+  if (!saved) {
+    return;
+  }
   setStatus("Testing...");
 
   try {
@@ -233,11 +241,53 @@ function setStatus(message) {
 
 function getExtensionApi() {
   const runtime = globalThis.chrome?.runtime;
-  const storage = globalThis.chrome?.storage?.sync;
+  const storage = globalThis.chrome?.storage?.local;
+  const permissions = globalThis.chrome?.permissions;
 
   return {
     runtime: runtime?.sendMessage ? runtime : null,
     storage: storage?.get && storage?.set ? storage : null,
+    permissions: permissions?.request ? permissions : null,
     openOptionsPage: runtime?.openOptionsPage ? () => runtime.openOptionsPage() : null
   };
+}
+
+function ensureExternalApiPermission(settings) {
+  if (settings.apiProvider !== "external" || !settings.apiUrl) {
+    return Promise.resolve(true);
+  }
+
+  const origin = getExternalApiOriginPattern(settings.apiUrl);
+  if (!origin) {
+    setStatus("External API URL must start with http:// or https://.");
+    return Promise.resolve(false);
+  }
+
+  if (!extensionApi.permissions) {
+    return Promise.resolve(true);
+  }
+
+  return new Promise((resolve) => {
+    extensionApi.permissions.request({ origins: [origin] }, (granted) => {
+      if (granted) {
+        resolve(true);
+        return;
+      }
+
+      setStatus("External API host permission was not granted.");
+      resolve(false);
+    });
+  });
+}
+
+function getExternalApiOriginPattern(value) {
+  try {
+    const url = new URL(value);
+    if (!["http:", "https:"].includes(url.protocol)) {
+      return "";
+    }
+    return `${url.origin}/*`;
+  } catch {
+    return "";
+  }
 }

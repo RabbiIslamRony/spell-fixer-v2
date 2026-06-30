@@ -3,7 +3,8 @@
 Chrome grammar assistant with direct Qwen/Gemini API key support. A user can choose `Qwen` or `Gemini` in the popup, paste that provider API key, and use the extension without Cloudflare or source-code edits.
 
 [Live Preview](https://self-hosted-grammar-worker.rony-sovware.workers.dev/) |
-[Latest Extension Release](https://github.com/RabbiIslamRony/spell-fixer-v2/releases/latest)
+[Latest Extension Release](https://github.com/RabbiIslamRony/spell-fixer-v2/releases/latest) |
+[Privacy Policy](https://self-hosted-grammar-worker.rony-sovware.workers.dev/privacy)
 
 For end-user setup, see [USER_SETUP.md](./USER_SETUP.md).
 
@@ -18,7 +19,7 @@ npm run package
 Output:
 
 ```text
-dist/grammar-assistant-extension-v0.3.8.zip
+dist/grammar-assistant-extension-v0.3.9.zip
 ```
 
 The ZIP includes only Chrome runtime files and `USER_SETUP.md`. It excludes development-only items such as `.git`, `cloudflare-worker`, `server-example`, `node_modules`, `dist`, scripts, and QA docs.
@@ -49,7 +50,7 @@ For development:
 
 For a packaged ZIP:
 
-1. Unzip `dist/grammar-assistant-extension-v0.3.8.zip`.
+1. Unzip `dist/grammar-assistant-extension-v0.3.9.zip`.
 2. Open `chrome://extensions`.
 3. Turn on `Developer mode`.
 4. Click `Load unpacked`.
@@ -93,6 +94,14 @@ Put one domain per line in `Site list`, for example `example.com` or `docs.examp
 
 ## Privacy Notes
 
+The extension stores settings and API keys in Chrome local extension storage. API keys are not stored with Chrome sync.
+
 The extension sends text from the active editor to the selected provider only after typing pauses or the user manually runs a check. Page URLs are not sent unless `Include page URL` is enabled.
+
+Public privacy policy URL for Chrome Web Store submission:
+
+```text
+https://self-hosted-grammar-worker.rony-sovware.workers.dev/privacy
+```
 
 Do not publish real API keys in GitHub, screenshots, ZIP files, or documentation.
