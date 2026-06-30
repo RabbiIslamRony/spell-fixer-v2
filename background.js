@@ -680,7 +680,10 @@ function migrateSettingsToLocalStorage() {
       const items = {
         ...DEFAULT_SETTINGS,
         ...syncItems,
-        ...localItems
+        ...localItems,
+        apiKey: localItems.apiKey || syncItems.apiKey || DEFAULT_SETTINGS.apiKey,
+        apiProvider: localItems.apiProvider || syncItems.apiProvider || DEFAULT_SETTINGS.apiProvider,
+        apiUrl: localItems.apiUrl || syncItems.apiUrl || DEFAULT_SETTINGS.apiUrl
       };
       chrome.storage.local.set(normalizeStoredSettings(items), () => {
         chrome.storage.sync.remove(Object.keys(DEFAULT_SETTINGS));

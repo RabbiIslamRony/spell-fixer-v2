@@ -4,7 +4,7 @@ This guide is for users installing the packaged Chrome extension.
 
 ## Install From ZIP
 
-1. Unzip `grammar-assistant-extension-v0.3.9.zip`.
+1. Unzip `grammar-assistant-extension-v0.3.10.zip`.
 2. Open Chrome and go to `chrome://extensions`.
 3. Turn on `Developer mode`.
 4. Click `Load unpacked`.

@@ -19,7 +19,7 @@ npm run package
 Output:
 
 ```text
-dist/grammar-assistant-extension-v0.3.9.zip
+dist/grammar-assistant-extension-v0.3.10.zip
 ```
 
 The ZIP includes only Chrome runtime files and `USER_SETUP.md`. It excludes development-only items such as `.git`, `cloudflare-worker`, `server-example`, `node_modules`, `dist`, scripts, and QA docs.
@@ -50,7 +50,7 @@ For development:
 
 For a packaged ZIP:
 
-1. Unzip `dist/grammar-assistant-extension-v0.3.9.zip`.
+1. Unzip `dist/grammar-assistant-extension-v0.3.10.zip`.
 2. Open `chrome://extensions`.
 3. Turn on `Developer mode`.
 4. Click `Load unpacked`.

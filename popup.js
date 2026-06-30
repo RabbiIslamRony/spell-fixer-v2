@@ -56,8 +56,10 @@ function loadSettings() {
   }
 
   extensionApi.storage.get(DEFAULT_SETTINGS, (settings) => {
-    applySettingsToForm(settings);
-    updateStatusCard(settings);
+    recoverSyncedSettings(settings).then((nextSettings) => {
+      applySettingsToForm(nextSettings);
+      updateStatusCard(nextSettings);
+    });
   });
 }
 
@@ -242,14 +244,47 @@ function setStatus(message) {
 function getExtensionApi() {
   const runtime = globalThis.chrome?.runtime;
   const storage = globalThis.chrome?.storage?.local;
+  const syncStorage = globalThis.chrome?.storage?.sync;
   const permissions = globalThis.chrome?.permissions;
 
   return {
     runtime: runtime?.sendMessage ? runtime : null,
     storage: storage?.get && storage?.set ? storage : null,
+    syncStorage: syncStorage?.get && syncStorage?.remove ? syncStorage : null,
     permissions: permissions?.request ? permissions : null,
     openOptionsPage: runtime?.openOptionsPage ? () => runtime.openOptionsPage() : null
   };
+}
+
+function recoverSyncedSettings(localSettings) {
+  if (localSettings.apiKey || !extensionApi.syncStorage || !extensionApi.storage) {
+    return Promise.resolve(localSettings);
+  }
+
+  return new Promise((resolve) => {
+    extensionApi.syncStorage.get(DEFAULT_SETTINGS, (syncSettings) => {
+      if (!syncSettings.apiKey) {
+        resolve(localSettings);
+        return;
+      }
+
+      const recoveredSettings = {
+        ...DEFAULT_SETTINGS,
+        ...syncSettings,
+        ...localSettings,
+        apiKey: syncSettings.apiKey,
+        apiProvider: localSettings.apiProvider || syncSettings.apiProvider,
+        apiUrl: localSettings.apiUrl || syncSettings.apiUrl,
+        settingsVersion: DEFAULT_SETTINGS.settingsVersion
+      };
+
+      extensionApi.storage.set(recoveredSettings, () => {
+        extensionApi.syncStorage.remove(Object.keys(DEFAULT_SETTINGS));
+        setStatus("Recovered old API key to local storage.");
+        resolve(recoveredSettings);
+      });
+    });
+  });
 }
 
 function ensureExternalApiPermission(settings) {
