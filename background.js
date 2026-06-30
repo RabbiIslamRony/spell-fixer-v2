@@ -1,6 +1,8 @@
+const HOSTED_WORKER_URL = "https://self-hosted-grammar-worker.rony-sovware.workers.dev/grammar/check";
+
 const DEFAULT_SETTINGS = {
-  apiProvider: "qwen",
-  apiUrl: "",
+  workerMode: "hosted",
+  workerUrl: HOSTED_WORKER_URL,
   apiKey: "",
   extensionEnabled: true,
   language: "en",
@@ -9,43 +11,13 @@ const DEFAULT_SETTINGS = {
   siteAccessMode: "all",
   siteAccessList: "",
   timeoutMs: 30000,
-  settingsVersion: 7
+  settingsVersion: 8
 };
 
 const RESPONSE_CACHE_LIMIT = 80;
 const RESPONSE_CACHE_TTL_MS = 120000;
-const QWEN_ENDPOINT_CACHE_KEY = "qwenEndpointId";
 const activeInlineControllers = new Map();
 const responseCache = new Map();
-
-const AI_PROVIDERS = {
-  gemini: {
-    label: "Gemini",
-    model: "gemini-3.5-flash",
-    endpoint: "https://generativelanguage.googleapis.com/v1beta/interactions"
-  },
-  qwen: {
-    label: "Qwen",
-    model: "qwen-plus",
-    endpoints: [
-      {
-        id: "singapore",
-        label: "Singapore",
-        url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions"
-      },
-      {
-        id: "us-virginia",
-        label: "US Virginia",
-        url: "https://dashscope-us.aliyuncs.com/compatible-mode/v1/chat/completions"
-      },
-      {
-        id: "china-beijing",
-        label: "China Beijing",
-        url: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-      }
-    ]
-  }
-};
 
 chrome.runtime.onInstalled.addListener(() => {
   migrateSettingsToLocalStorage();
@@ -79,10 +51,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 async function handleCheck(payload, sender) {
-  const settings = await getSettings();
-  const apiProvider = normalizeApiProvider(settings.apiProvider || inferProviderFromKey(settings.apiKey));
-  const apiUrl = String(settings.apiUrl || "").trim();
-  const apiKey = String(settings.apiKey || "").trim();
+  const settings = normalizeStoredSettings(await getSettings());
+  const workerUrl = getWorkerCheckUrl(settings);
+  const workerToken = String(settings.apiKey || "").trim();
   const text = String(payload.text || "").trim();
   const mode = payload.mode || settings.defaultMode || "grammar";
   const language = payload.language || settings.language || "en";
@@ -94,8 +65,12 @@ async function handleCheck(payload, sender) {
       throw new Error("Extension is off.");
     }
 
-    if (!apiKey) {
-      throw new Error(`Add your ${getProviderLabel(apiProvider)} API key in the extension popup.`);
+    if (!workerToken) {
+      throw new Error("Add your Worker access token in the extension popup.");
+    }
+
+    if (!workerUrl) {
+      throw new Error("Set a valid Worker URL in the extension popup.");
     }
 
     if (!text) {
@@ -108,9 +83,8 @@ async function handleCheck(payload, sender) {
     }
 
     const cacheKey = getResponseCacheKey({
-      provider: apiProvider,
-      apiUrl,
-      apiKey,
+      workerUrl,
+      workerToken,
       mode,
       language,
       scope,
@@ -121,69 +95,41 @@ async function handleCheck(payload, sender) {
       return cached;
     }
 
-    let result;
-    if (apiProvider !== "external") {
-      result = await checkWithDirectProvider({
-        provider: apiProvider,
-        apiKey,
-        text,
-        mode,
-        language,
-        pageUrl: settings.includePageUrl ? pageUrl : "",
-        timeoutMs: Number(settings.timeoutMs) || 30000,
-        scope,
-        signal: requestControl.signal
-      });
-      rememberResponse(cacheKey, result);
-      return result;
-    }
-
-    if (!apiUrl) {
-      throw new Error("Set your External API URL in the extension popup first.");
-    }
-
-    const headers = { "Content-Type": "application/json" };
-
-    if (apiKey) {
-      headers.Authorization = `Bearer ${apiKey}`;
-    }
-
-    const body = {
-      text,
-      mode,
-      language,
-      pageUrl: settings.includePageUrl ? pageUrl : "",
-      context: payload.context || "",
-      scope
-    };
-
     const response = await fetchWithTimeout(
-      apiUrl,
+      workerUrl,
       {
         method: "POST",
-        headers,
-        body: JSON.stringify(body)
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${workerToken}`
+        },
+        body: JSON.stringify({
+          text,
+          mode,
+          language,
+          pageUrl: settings.includePageUrl ? pageUrl : "",
+          context: payload.context || "",
+          scope,
+          requestId: Number(payload.requestId) || 0
+        })
       },
-      Number(settings.timeoutMs) || 30000,
+      Number(settings.timeoutMs) || DEFAULT_SETTINGS.timeoutMs,
       requestControl.signal
     );
+
     const rawText = await response.text();
     const data = parseJson(rawText);
 
     if (!response.ok) {
-      const detail = data?.error || data?.message || rawText || response.statusText;
-      if (response.status === 401 || response.status === 403) {
-        throw new Error("API key is invalid. Open the extension popup and update it.");
-      }
-      throw new Error(`API ${response.status}: ${detail}`);
+      throwWorkerError(response, data, rawText);
     }
 
-    result = normalizeApiResponse(data ?? rawText);
+    const result = normalizeApiResponse(data ?? rawText);
     rememberResponse(cacheKey, result);
     return result;
   } catch (error) {
     if (error?.name === "AbortError") {
-      throw new Error(scope === "inline" ? "Inline request replaced by newer typing." : "API request timed out.");
+      throw new Error(scope === "inline" ? "Inline request replaced by newer typing." : "Worker request timed out.");
     }
     throw error;
   } finally {
@@ -191,98 +137,26 @@ async function handleCheck(payload, sender) {
   }
 }
 
-async function checkWithDirectProvider({ provider, apiKey, text, mode, language, pageUrl, timeoutMs, scope, signal }) {
-  const prompt = buildAiPrompt({ text, mode, language, pageUrl, scope });
-  const result =
-    provider === "gemini"
-      ? await callGemini({ apiKey, prompt, timeoutMs, signal })
-      : await callQwen({ apiKey, prompt, timeoutMs, signal });
-  const parsed = parseModelJson(result.text);
-  return repairIssueOffsets(normalizeApiResponse(parsed || result.text), text);
-}
-
-async function callGemini({ apiKey, prompt, timeoutMs, signal }) {
-  const response = await fetchWithTimeout(
-    AI_PROVIDERS.gemini.endpoint,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey
-      },
-      body: JSON.stringify({
-        model: AI_PROVIDERS.gemini.model,
-        input: prompt
-      })
-    },
-    timeoutMs,
-    signal
-  );
-
-  const data = await readJsonResponse(response);
-  if (!response.ok) {
-    throwProviderError("Gemini", response, data);
+function throwWorkerError(response, data, rawText) {
+  const detail = data?.error || data?.message || rawText || response.statusText;
+  if (response.status === 401 || response.status === 403) {
+    throw new Error("Worker access token is invalid, expired, or revoked.");
   }
 
-  return {
-    text: extractGeminiText(data)
-  };
-}
-
-async function callQwen({ apiKey, prompt, timeoutMs, signal }) {
-  const errors = [];
-  for (const endpoint of await getQwenEndpointOrder()) {
-    try {
-      const response = await fetchWithTimeout(
-        endpoint.url,
-        {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${apiKey}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            model: AI_PROVIDERS.qwen.model,
-            messages: [
-              {
-                role: "system",
-                content: "You are a precise grammar and rewriting assistant. Return only valid JSON."
-              },
-              {
-                role: "user",
-                content: prompt
-              }
-            ]
-          })
-        },
-        timeoutMs,
-        signal
-      );
-
-      const data = await readJsonResponse(response);
-      if (!response.ok) {
-        throwProviderError(endpoint.label, response, data);
-      }
-
-      rememberQwenEndpoint(endpoint.id);
-      return {
-        text: extractQwenText(data),
-        endpointId: endpoint.id
-      };
-    } catch (error) {
-      if (signal?.aborted) {
-        throw error;
-      }
-      errors.push(`${endpoint.label}: ${error instanceof Error ? error.message : String(error)}`);
-    }
+  if (response.status === 429) {
+    throw new Error(detail || "Usage limit reached. Try again later.");
   }
 
-  throw new Error(`Qwen request failed. ${errors.join(" | ")}`);
+  if (response.status === 413) {
+    throw new Error(detail || "This text is too long for the current check mode.");
+  }
+
+  throw new Error(`Worker API ${response.status}: ${detail}`);
 }
 
 async function fetchWithTimeout(url, options, timeoutMs, signal) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), Number(timeoutMs) || 30000);
+  const timeoutId = setTimeout(() => controller.abort(), Number(timeoutMs) || DEFAULT_SETTINGS.timeoutMs);
   const abortFromSignal = () => controller.abort();
 
   if (signal?.aborted) {
@@ -298,7 +172,7 @@ async function fetchWithTimeout(url, options, timeoutMs, signal) {
     });
   } catch (error) {
     if (error?.name === "AbortError") {
-      throw new Error(signal?.aborted ? "Inline request replaced by newer typing." : "API request timed out.");
+      throw new Error(signal?.aborted ? "Inline request replaced by newer typing." : "Worker request timed out.");
     }
     throw error;
   } finally {
@@ -307,192 +181,50 @@ async function fetchWithTimeout(url, options, timeoutMs, signal) {
   }
 }
 
-async function readJsonResponse(response) {
-  const rawText = await response.text();
-  const data = parseJson(rawText);
-  return data ?? { message: rawText };
-}
-
-function throwProviderError(label, response, data) {
-  const detail = data?.error?.message || data?.message || data?.error || response.statusText;
-  if (response.status === 401 || response.status === 403) {
-    throw new Error(`${label} API key is invalid for this endpoint.`);
-  }
-  throw new Error(`${label} API ${response.status}: ${detail}`);
-}
-
-function buildAiPrompt({ text, mode, language, pageUrl, scope }) {
-  const task =
-    mode === "rewrite"
-      ? "Rewrite the text for clarity while preserving meaning."
-      : mode === "shorten"
-        ? "Shorten the text while preserving meaning."
-        : "Fix grammar, spelling, punctuation, and obvious wording mistakes.";
-  const inline = scope === "inline";
-
-  return [
-    `Task: ${task}`,
-    `Language: ${language || "en"}`,
-    pageUrl ? `Page URL context: ${pageUrl}` : "",
-    inline
-      ? "Inline check: return issue offsets only for the provided input. Do not rewrite the whole text."
-      : "",
-    "Return only valid JSON with this shape:",
-    inline
-      ? '{"issues":[{"start":0,"end":4,"original":"text","replacement":"fixed","title":"Grammar","explanation":"short reason","severity":"grammar"}], "suggestions":[]}'
-      : '{"correctedText":"...", "issues":[{"start":0,"end":4,"original":"text","replacement":"fixed","title":"Grammar","explanation":"short reason","severity":"grammar"}], "suggestions":[]}',
-    inline
-      ? "Use zero-based character offsets from the provided input. If offsets are uncertain, return an empty issues array."
-      : "Use zero-based character offsets from the original input for issues. If offsets are uncertain, return an empty issues array but still return correctedText.",
-    "Original input:",
-    text
-  ].filter(Boolean).join("\n");
-}
-
-function extractGeminiText(data) {
-  if (typeof data?.output_text === "string" && data.output_text.trim()) {
-    return data.output_text.trim();
-  }
-
-  const text = collectText(data).join("\n").trim();
-  return text || JSON.stringify(data);
-}
-
-function extractQwenText(data) {
-  const message = data?.choices?.[0]?.message?.content;
-  if (typeof message === "string" && message.trim()) {
-    return message.trim();
-  }
-
-  if (Array.isArray(message)) {
-    const text = message
-      .map((item) => (typeof item === "string" ? item : item?.text || item?.content || ""))
-      .filter(Boolean)
-      .join("\n")
-      .trim();
-    if (text) {
-      return text;
-    }
-  }
-
-  return JSON.stringify(data);
-}
-
-function collectText(value, collected = []) {
-  if (!value || typeof value !== "object") {
-    return collected;
-  }
-
-  if (typeof value.text === "string" && value.text.trim()) {
-    collected.push(value.text.trim());
-  }
-
-  if (Array.isArray(value)) {
-    value.forEach((item) => collectText(item, collected));
-    return collected;
-  }
-
-  Object.values(value).forEach((item) => collectText(item, collected));
-  return collected;
-}
-
-function parseModelJson(value) {
-  const text = String(value || "").trim();
-  if (!text) {
-    return null;
-  }
-
-  const unfenced = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-  const direct = parseJson(unfenced);
-  if (direct) {
-    return direct;
-  }
-
-  const start = unfenced.indexOf("{");
-  const end = unfenced.lastIndexOf("}");
-  if (start >= 0 && end > start) {
-    return parseJson(unfenced.slice(start, end + 1));
-  }
-
-  return null;
-}
-
-function repairIssueOffsets(data, sourceText) {
-  if (!Array.isArray(data?.issues) || !sourceText) {
-    return data;
-  }
-
-  const usedRanges = [];
-  const issues = data.issues
-    .map((issue) => {
-      const original = firstString(issue.original);
-      const start = Number(issue.start);
-      const end = Number(issue.end);
-
-      if (Number.isInteger(start) && Number.isInteger(end) && sourceText.slice(start, end) === original) {
-        usedRanges.push([start, end]);
-        return issue;
-      }
-
-      if (!original) {
-        return issue;
-      }
-
-      const found = findUnusedTextRange(sourceText, original, usedRanges);
-      if (!found) {
-        return issue;
-      }
-
-      usedRanges.push(found);
-      return {
-        ...issue,
-        start: found[0],
-        end: found[1]
-      };
-    })
-    .filter((issue) => {
-      const start = Number(issue.start);
-      const end = Number(issue.end);
-      return Number.isInteger(start) && Number.isInteger(end) && end > start && end <= sourceText.length;
-    });
-
-  return {
-    ...data,
-    issues
-  };
-}
-
-function findUnusedTextRange(sourceText, needle, usedRanges) {
-  let index = sourceText.indexOf(needle);
-  while (index >= 0) {
-    const range = [index, index + needle.length];
-    const overlaps = usedRanges.some(([start, end]) => range[0] < end && range[1] > start);
-    if (!overlaps) {
-      return range;
-    }
-    index = sourceText.indexOf(needle, index + 1);
-  }
-  return null;
-}
-
 function normalizeSiteAccessMode(value) {
   return ["all", "blocklist", "allowlist"].includes(value) ? value : DEFAULT_SETTINGS.siteAccessMode;
 }
 
-function normalizeApiProvider(value) {
-  return ["qwen", "gemini", "external"].includes(value) ? value : DEFAULT_SETTINGS.apiProvider;
+function normalizeWorkerMode(value) {
+  return value === "custom" ? "custom" : DEFAULT_SETTINGS.workerMode;
 }
 
-function inferProviderFromKey(value) {
-  return String(value || "").trim().startsWith("sk-ws-") ? "qwen" : DEFAULT_SETTINGS.apiProvider;
+function getWorkerCheckUrl(settings) {
+  const mode = normalizeWorkerMode(settings.workerMode);
+  if (mode === "hosted") {
+    return HOSTED_WORKER_URL;
+  }
+
+  return normalizeWorkerUrl(settings.workerUrl);
 }
 
-function getProviderLabel(provider) {
-  return {
-    qwen: "Qwen",
-    gemini: "Gemini",
-    external: "External API"
-  }[normalizeApiProvider(provider)];
+function normalizeWorkerUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  try {
+    const url = new URL(raw);
+    if (!["http:", "https:"].includes(url.protocol)) {
+      return "";
+    }
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
+function isHostedWorkerUrl(value) {
+  return normalizeWorkerUrl(value) === HOSTED_WORKER_URL;
+}
+
+function isLegacyCustomWorker(items) {
+  return (
+    items.workerMode === "custom" ||
+    items.apiProvider === "external" ||
+    Boolean(items.apiUrl && normalizeWorkerUrl(items.apiUrl) && !isHostedWorkerUrl(items.apiUrl))
+  );
 }
 
 function isSiteAllowed(settings, pageUrl) {
@@ -575,11 +307,10 @@ function getInlineRequestKey(sender) {
   return `${sender?.tab?.id ?? "no-tab"}:${sender?.frameId ?? 0}`;
 }
 
-function getResponseCacheKey({ provider, apiUrl, apiKey, mode, language, scope, text }) {
+function getResponseCacheKey({ workerUrl, workerToken, mode, language, scope, text }) {
   return [
-    provider,
-    provider === "external" ? apiUrl : "",
-    getApiKeyFingerprint(apiKey),
+    workerUrl,
+    getTokenFingerprint(workerToken),
     mode || "grammar",
     language || "en",
     scope || "panel",
@@ -587,8 +318,8 @@ function getResponseCacheKey({ provider, apiUrl, apiKey, mode, language, scope, 
   ].join("|");
 }
 
-function getApiKeyFingerprint(apiKey) {
-  const value = String(apiKey || "");
+function getTokenFingerprint(token) {
+  const value = String(token || "");
   return `${value.length}:${value.slice(0, 6)}:${value.slice(-4)}`;
 }
 
@@ -628,42 +359,6 @@ function cloneData(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-async function getQwenEndpointOrder() {
-  const cachedId = await getLocalValue(QWEN_ENDPOINT_CACHE_KEY);
-  const endpoints = AI_PROVIDERS.qwen.endpoints;
-  if (!cachedId) {
-    return endpoints;
-  }
-
-  const preferred = endpoints.find((endpoint) => endpoint.id === cachedId);
-  if (!preferred) {
-    return endpoints;
-  }
-
-  return [preferred, ...endpoints.filter((endpoint) => endpoint.id !== cachedId)];
-}
-
-function rememberQwenEndpoint(endpointId) {
-  if (!endpointId || !chrome.storage?.local) {
-    return;
-  }
-
-  chrome.storage.local.set({ [QWEN_ENDPOINT_CACHE_KEY]: endpointId });
-}
-
-function getLocalValue(key) {
-  return new Promise((resolve) => {
-    if (!chrome.storage?.local) {
-      resolve("");
-      return;
-    }
-
-    chrome.storage.local.get({ [key]: "" }, (items) => {
-      resolve(items?.[key] || "");
-    });
-  });
-}
-
 function getSettings() {
   return new Promise((resolve) => {
     chrome.storage.local.get(DEFAULT_SETTINGS, resolve);
@@ -677,30 +372,41 @@ function migrateSettingsToLocalStorage() {
 
   chrome.storage.sync.get(null, (syncItems = {}) => {
     chrome.storage.local.get(null, (localItems = {}) => {
-      const items = {
+      const mergedItems = {
         ...DEFAULT_SETTINGS,
         ...syncItems,
-        ...localItems,
-        apiKey: localItems.apiKey || syncItems.apiKey || DEFAULT_SETTINGS.apiKey,
-        apiProvider: localItems.apiProvider || syncItems.apiProvider || DEFAULT_SETTINGS.apiProvider,
-        apiUrl: localItems.apiUrl || syncItems.apiUrl || DEFAULT_SETTINGS.apiUrl
+        ...localItems
       };
-      chrome.storage.local.set(normalizeStoredSettings(items), () => {
-        chrome.storage.sync.remove(Object.keys(DEFAULT_SETTINGS));
+      chrome.storage.local.set(normalizeStoredSettings(mergedItems), () => {
+        chrome.storage.sync.remove([
+          ...Object.keys(DEFAULT_SETTINGS),
+          "apiProvider",
+          "apiUrl",
+          "qwenEndpointId"
+        ]);
       });
     });
   });
 }
 
 function normalizeStoredSettings(items) {
+  const customWorker = isLegacyCustomWorker(items);
+  const workerMode = normalizeWorkerMode(items.workerMode || (customWorker ? "custom" : "hosted"));
+  const legacyWorkerUrl = normalizeWorkerUrl(items.workerUrl || items.apiUrl);
+  const workerUrl = workerMode === "custom" ? legacyWorkerUrl : HOSTED_WORKER_URL;
+  const preserveToken = items.settingsVersion >= DEFAULT_SETTINGS.settingsVersion || customWorker;
+
   return {
     ...DEFAULT_SETTINGS,
-    ...items,
-    apiProvider: normalizeApiProvider(items.apiProvider || inferProviderFromKey(items.apiKey)),
-    apiUrl: typeof items.apiUrl === "string" ? items.apiUrl : DEFAULT_SETTINGS.apiUrl,
-    apiKey: typeof items.apiKey === "string" ? items.apiKey : DEFAULT_SETTINGS.apiKey,
+    workerMode,
+    workerUrl,
+    apiKey: preserveToken && typeof items.apiKey === "string" ? items.apiKey : DEFAULT_SETTINGS.apiKey,
     extensionEnabled:
       typeof items.extensionEnabled === "boolean" ? items.extensionEnabled : DEFAULT_SETTINGS.extensionEnabled,
+    language: typeof items.language === "string" && items.language.trim() ? items.language.trim() : DEFAULT_SETTINGS.language,
+    defaultMode: ["grammar", "rewrite", "shorten"].includes(items.defaultMode)
+      ? items.defaultMode
+      : DEFAULT_SETTINGS.defaultMode,
     includePageUrl:
       typeof items.includePageUrl === "boolean" ? items.includePageUrl : DEFAULT_SETTINGS.includePageUrl,
     siteAccessMode: normalizeSiteAccessMode(items.siteAccessMode),
@@ -726,7 +432,8 @@ function normalizeApiResponse(data) {
   if (typeof data === "string") {
     return {
       correctedText: data,
-      suggestions: []
+      suggestions: [],
+      issues: []
     };
   }
 

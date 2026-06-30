@@ -1,12 +1,26 @@
 # Grammar Assistant Chrome Extension
 
-Chrome grammar assistant with direct Qwen/Gemini API key support. A user can choose `Qwen` or `Gemini` in the popup, paste that provider API key, and use the extension without Cloudflare or source-code edits.
+Chrome grammar assistant with fast inline suggestions powered by a hosted or self-hosted Cloudflare Worker. The extension stores only a Worker access token locally; AI provider keys stay encrypted in the Worker admin settings or Cloudflare secrets.
 
 [Live Preview](https://self-hosted-grammar-worker.rony-sovware.workers.dev/) |
 [Latest Extension Release](https://github.com/RabbiIslamRony/spell-fixer-v2/releases/latest) |
 [Privacy Policy](https://self-hosted-grammar-worker.rony-sovware.workers.dev/privacy)
 
 For end-user setup, see [USER_SETUP.md](./USER_SETUP.md).
+
+## Landing Page
+
+The public landing page is a static Next.js app in `landing/`. Build it into the Worker static assets before deploying:
+
+```bash
+npm run landing:build
+```
+
+For local landing development:
+
+```bash
+npm run landing:dev
+```
 
 ## Build ZIP
 
@@ -19,26 +33,105 @@ npm run package
 Output:
 
 ```text
-dist/grammar-assistant-extension-v0.3.10.zip
+dist/grammar-assistant-extension-v0.4.0.zip
 ```
 
 The ZIP includes only Chrome runtime files and `USER_SETUP.md`. It excludes development-only items such as `.git`, `cloudflare-worker`, `server-example`, `node_modules`, `dist`, scripts, and QA docs.
 
-## Landing Page
+## Access Model
 
-The public landing page lives in `cloudflare-worker/public/` and is served by the Cloudflare Worker static assets binding. It includes a browser-only demo, so visitor demo text is not sent to Qwen, Gemini, or the Worker API.
+The extension supports two Worker modes:
 
-Public preview:
+- `Hosted Worker`: uses `https://self-hosted-grammar-worker.rony-sovware.workers.dev/grammar/check`.
+- `Custom Worker`: advanced users enter their own Worker `/grammar/check` URL and token.
+
+Normal users paste only a Worker access token. They do not paste Gemini, Qwen, OpenAI, or other AI provider keys into Chrome.
+
+## Admin Dashboard
+
+The hosted Worker includes an admin dashboard:
 
 ```text
-https://self-hosted-grammar-worker.rony-sovware.workers.dev/
+https://self-hosted-grammar-worker.rony-sovware.workers.dev/admin
 ```
 
-The landing page links to GitHub Releases for installation. The extension ZIP is not copied into the Cloudflare static assets folder.
+Admin capabilities:
 
-GitHub Actions can deploy the landing page and Worker from `main` using `.github/workflows/deploy-cloudflare-worker.yml`. Add repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` before relying on automatic deploys.
+- Quick invite: create/reactivate a user and generate an extension token in one step.
+- Revoke tokens.
+- Set daily and per-minute quotas.
+- Change the AI provider, model, endpoint, and API key.
+- View recent usage and Worker health.
 
-## Load in Chrome
+Admin login requires Cloudflare secrets:
+
+```bash
+npm --prefix cloudflare-worker run hash-password -- "your-strong-password"
+cd cloudflare-worker
+npx wrangler secret put ADMIN_EMAIL
+npx wrangler secret put ADMIN_PASSWORD_HASH
+npx wrangler secret put SESSION_SECRET
+```
+
+`ADMIN_PASSWORD_HASH` should be the generated `pbkdf2:...` value. `SESSION_SECRET` should be a separate long random secret.
+
+Normal admin workflow:
+
+1. Open `/admin`.
+2. Use `Quick invite`.
+3. Enter the user's email and quota.
+4. Click `Create token`.
+5. Copy the generated token immediately and send it to the user.
+
+The token is shown only once. If a user loses it, create another token.
+
+New tokens are also stored encrypted in D1 so the admin dashboard can reveal/copy them again from the Tokens table. Older tokens created before encrypted storage cannot be recovered; create a new token for those users.
+
+## Worker Secrets
+
+The Worker can use a D1 token database, the fallback `GRAMMAR_API_KEY`, or both.
+
+Required for self-host fallback token mode:
+
+```bash
+cd cloudflare-worker
+npx wrangler secret put GRAMMAR_API_KEY
+```
+
+Recommended AI setup:
+
+1. Open `/admin`.
+2. Use `AI API settings`.
+3. Choose `OpenAI`, `Qwen / DashScope`, `Gemini`, or `Other OpenAI-compatible`.
+4. For OpenAI, Qwen, or Gemini, the default API URL/model auto-fill when the provider changes.
+5. Paste the API key.
+6. For `Other OpenAI-compatible`, enter that platform's chat completions API URL and model.
+7. Click `Save & test`.
+
+The admin-saved API key is encrypted in D1 and shown only inside the private admin form after login. Saving requires an API key and overrides `AI_API_KEY` from Cloudflare secrets. The dashboard stores provider connection status as `connected`, `failed`, or `not checked`, plus a ready status.
+
+Cloudflare secret fallback:
+
+```bash
+cd cloudflare-worker
+npx wrangler secret put AI_API_KEY
+```
+
+Tracked Worker vars in `cloudflare-worker/wrangler.toml`:
+
+```toml
+AI_PROVIDER = "openai"
+AI_API_URL = "https://api.openai.com/v1/chat/completions"
+AI_MODEL = "gpt-4.1-mini"
+STORE_QA_PREVIEWS = "false"
+QA_RETENTION_DAYS = "30"
+INLINE_TEXT_LIMIT = "1000"
+PANEL_TEXT_LIMIT = "6000"
+```
+
+For Qwen, choose `Qwen / DashScope` and paste a DashScope key; the Worker tests both official DashScope regions and saves the working endpoint. The default model is `qwen-plus`. For Gemini, choose `Gemini`, leave the URL blank, use model `gemini-2.5-flash`, and paste a Gemini key. For other platforms, choose `Other OpenAI-compatible` and enter the platform's chat completions API URL.
+
+## Load In Chrome
 
 For development:
 
@@ -50,7 +143,7 @@ For development:
 
 For a packaged ZIP:
 
-1. Unzip `dist/grammar-assistant-extension-v0.3.10.zip`.
+1. Unzip `dist/grammar-assistant-extension-v0.4.0.zip`.
 2. Open `chrome://extensions`.
 3. Turn on `Developer mode`.
 4. Click `Load unpacked`.
@@ -60,18 +153,11 @@ For a packaged ZIP:
 
 1. Click the extension icon in Chrome.
 2. Open `Advanced`.
-3. Select `AI provider`.
-4. Paste the matching API key.
-5. Click `Save settings`.
-6. Click `Test`.
-
-Provider defaults:
-
-- `Qwen`: DashScope `qwen-plus`; Singapore endpoint is tried first.
-- `Gemini`: Gemini `gemini-3.5-flash`.
-- `External API`: optional custom API URL using the extension's original grammar API contract.
-
-`API URL` stays hidden and blank unless `External API` is selected.
+3. Keep `Worker mode` as `Hosted Worker`, or choose `Custom Worker`.
+4. For Custom Worker, paste the full `/grammar/check` URL.
+5. Paste the Worker access token.
+6. Click `Save settings`.
+7. Click `Test`.
 
 ## Use
 
@@ -80,23 +166,28 @@ Provider defaults:
 3. Type and pause briefly.
 4. The extension underlines detected issues.
 5. Use the issue tray, suggestion bubble, or `Fix all` to apply corrections.
-6. Use the floating `GA` button or `Ctrl+Shift+G` to open the full panel.
+6. Use the floating assistant button or `Ctrl+Shift+G` to open the full panel.
 
-## Site Access
+## Cloudflare Deploy
 
-Open `Advanced` in the popup:
+Apply D1 migrations before deploying a fresh Worker:
 
-- `All sites`: check text on any supported website.
-- `All except listed sites`: disable suggestions on listed domains.
-- `Only listed sites`: run suggestions only on approved domains.
+```bash
+npm --prefix cloudflare-worker install
+cd cloudflare-worker
+npx wrangler d1 migrations apply grammar-assistant-db --remote
+npm run deploy
+```
 
-Put one domain per line in `Site list`, for example `example.com` or `docs.example.com`.
+The Worker also creates missing auth tables at runtime, but migrations keep deployments reproducible.
 
 ## Privacy Notes
 
-The extension stores settings and API keys in Chrome local extension storage. API keys are not stored with Chrome sync.
+The extension stores settings and the Worker token in Chrome local extension storage. It does not use Chrome sync for secrets.
 
-The extension sends text from the active editor to the selected provider only after typing pauses or the user manually runs a check. Page URLs are not sent unless `Include page URL` is enabled.
+The extension sends text from the active editor to the configured Worker only after typing pauses or the user manually runs a check. Page URLs are not sent unless `Include page URL` is enabled.
+
+Worker QA text previews stay disabled by default with `STORE_QA_PREVIEWS=false`.
 
 Public privacy policy URL for Chrome Web Store submission:
 
@@ -104,4 +195,4 @@ Public privacy policy URL for Chrome Web Store submission:
 https://self-hosted-grammar-worker.rony-sovware.workers.dev/privacy
 ```
 
-Do not publish real API keys in GitHub, screenshots, ZIP files, or documentation.
+Do not publish real Worker tokens or AI provider keys in GitHub, screenshots, ZIP files, or documentation.

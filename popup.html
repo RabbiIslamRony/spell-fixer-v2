@@ -26,8 +26,8 @@
 
       <div id="setupNotice" class="setup-card" hidden>
         <div>
-          <strong>Connect API key</strong>
-          <span>Paste your Gemini or Qwen key once. No source edit needed.</span>
+          <strong>Connect Worker</strong>
+          <span>Paste your Worker access token once. AI keys stay on the Worker.</span>
         </div>
         <button id="setupKey" type="button">Setup</button>
       </div>
@@ -50,22 +50,21 @@
         <summary>Advanced</summary>
 
         <label>
-          AI provider
-          <select id="apiProvider">
-            <option value="qwen">Qwen</option>
-            <option value="gemini">Gemini</option>
-            <option value="external">External API</option>
+          Worker mode
+          <select id="workerMode">
+            <option value="hosted">Hosted Worker</option>
+            <option value="custom">Custom Worker</option>
           </select>
         </label>
 
-        <label id="apiUrlRow" class="external-only" hidden>
-          External API URL
-          <input id="apiUrl" type="url" placeholder="https://your-worker.workers.dev/grammar/check">
+        <label id="workerUrlRow" class="custom-only" hidden>
+          Worker URL
+          <input id="workerUrl" type="url" placeholder="https://your-worker.workers.dev/grammar/check">
         </label>
 
         <label>
-          API key
-          <input id="apiKey" type="password" placeholder="Qwen DashScope API key">
+          Worker access token
+          <input id="apiKey" type="password" placeholder="Paste Worker access token">
         </label>
 
         <div class="grid">

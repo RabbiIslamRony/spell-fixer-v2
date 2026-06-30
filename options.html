@@ -9,18 +9,19 @@
   <body>
     <main>
       <h1>Self Hosted Grammar Assistant</h1>
-      <p>This is an original extension. It sends text to your own API and displays the returned correction.</p>
+      <p>This extension sends text to a hosted or self-hosted Cloudflare Worker. AI provider keys stay on the Worker, not in Chrome.</p>
 
       <section>
         <h2>API request</h2>
         <pre><code>POST /grammar/check
 Content-Type: application/json
-Authorization: Bearer optional-api-key
+Authorization: Bearer worker-access-token
 
 {
   "text": "This are a sentence.",
   "mode": "grammar",
   "language": "en",
+  "scope": "panel",
   "pageUrl": "https://example.com",
   "context": ""
 }</code></pre>
@@ -30,15 +31,28 @@ Authorization: Bearer optional-api-key
         <h2>API response</h2>
         <pre><code>{
   "correctedText": "This is a sentence.",
-  "suggestions": [
+  "issues": [
     {
+      "start": 0,
+      "end": 8,
+      "original": "This are",
+      "replacement": "This is",
       "title": "Subject verb agreement",
-      "replacement": "This is a sentence.",
       "explanation": "Use 'is' with singular 'This'.",
       "severity": "grammar"
     }
-  ]
+  ],
+  "suggestions": []
 }</code></pre>
+      </section>
+
+      <section>
+        <h2>Worker modes</h2>
+        <ol>
+          <li>Use Hosted Worker when the admin gives you an access token.</li>
+          <li>Use Custom Worker when you deploy your own Cloudflare Worker.</li>
+          <li>Custom Worker requires the full <code>/grammar/check</code> URL and its matching token.</li>
+        </ol>
       </section>
 
       <section>
@@ -46,25 +60,15 @@ Authorization: Bearer optional-api-key
         <ol>
           <li>Open the extension popup and turn Extension on.</li>
           <li>Focus a text box on any website.</li>
-          <li>Start typing. The floating GA button appears only after typing pauses for a moment.</li>
+          <li>Start typing. The floating assistant button appears only after typing pauses for a moment.</li>
           <li>Choose a red-underlined issue or replacement chip to apply a fix.</li>
           <li>Click outside the assistant UI to hide the suggestion bubble or full panel.</li>
         </ol>
       </section>
 
       <section>
-        <h2>Pause suggestions</h2>
-        <p>Use the Extension toggle in the popup to turn live suggestions off without deleting your API settings.</p>
-      </section>
-
-      <section>
-        <h2>Site access</h2>
-        <p>Use Advanced settings in the popup to allow all sites, block listed domains, or run only on listed domains.</p>
-      </section>
-
-      <section>
         <h2>Privacy</h2>
-        <p>Text is sent only to the configured grammar API. Page URLs are not sent unless Include page URL is enabled. Worker QA text previews are disabled by default.</p>
+        <p>Text is sent only to the configured Worker. Page URLs are not sent unless Include page URL is enabled. Worker QA text previews are disabled by default.</p>
       </section>
     </main>
   </body>

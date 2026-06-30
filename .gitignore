@@ -1,4 +1,6 @@
 node_modules/
+landing/.next/
+landing/out/
 .wrangler/
 .dev.vars
 .env

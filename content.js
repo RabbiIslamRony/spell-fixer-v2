@@ -19,6 +19,7 @@
   const INLINE_STATUS_DELAY = 180;
   const INLINE_SLOW_STATUS_DELAY = 2000;
   const INLINE_MIN_TEXT_LENGTH = 3;
+  const HOSTED_WORKER_URL = "https://self-hosted-grammar-worker.rony-sovware.workers.dev/grammar/check";
   const BADGE_SHOW_DELAY = 500;
   const BADGE_SIZE = 34;
   const BADGE_VIEWPORT_GAP = 8;
@@ -26,12 +27,13 @@
   const BADGE_RIGHT_RESERVE = 76;
   const INLINE_TEXT_LIMIT = 800;
   const CONTENT_DEFAULT_SETTINGS = {
-    apiProvider: "qwen",
+    workerMode: "hosted",
+    workerUrl: HOSTED_WORKER_URL,
     language: "en",
     extensionEnabled: true,
     siteAccessMode: "all",
     siteAccessList: "",
-    settingsVersion: 7
+    settingsVersion: 8
   };
 
   const state = {
@@ -44,7 +46,8 @@
     siteAccessMode: "all",
     siteAccessList: "",
     siteAllowed: true,
-    apiProvider: "qwen",
+    workerMode: "hosted",
+    workerUrl: HOSTED_WORKER_URL,
     language: "en",
     button: null,
     panel: null,
@@ -212,7 +215,8 @@
 
       if (
         changes.extensionEnabled ||
-        changes.apiProvider ||
+        changes.workerMode ||
+        changes.workerUrl ||
         changes.language ||
         changes.siteAccessMode ||
         changes.siteAccessList ||
@@ -226,7 +230,8 @@
   function applyContentSettings(settings) {
     const nextEnabled = settings.extensionEnabled !== false;
     state.extensionEnabled = nextEnabled;
-    state.apiProvider = normalizeApiProvider(settings.apiProvider);
+    state.workerMode = normalizeWorkerMode(settings.workerMode);
+    state.workerUrl = normalizeWorkerUrl(settings.workerUrl) || HOSTED_WORKER_URL;
     state.language = String(settings.language || "en").trim() || "en";
     state.siteAccessMode = normalizeSiteAccessMode(settings.siteAccessMode);
     state.siteAccessList = settings.siteAccessList || "";
@@ -475,8 +480,25 @@
     return ["all", "blocklist", "allowlist"].includes(value) ? value : "all";
   }
 
-  function normalizeApiProvider(value) {
-    return ["qwen", "gemini", "external"].includes(value) ? value : "qwen";
+  function normalizeWorkerMode(value) {
+    return value === "custom" ? "custom" : "hosted";
+  }
+
+  function normalizeWorkerUrl(value) {
+    const raw = String(value || "").trim();
+    if (!raw) {
+      return "";
+    }
+
+    try {
+      const url = new URL(raw);
+      if (!["http:", "https:"].includes(url.protocol)) {
+        return "";
+      }
+      return url.toString();
+    } catch {
+      return "";
+    }
   }
 
   function isCurrentSiteAllowed() {
@@ -767,7 +789,8 @@
 
   function getCheckCacheKey(mode, text) {
     return [
-      normalizeApiProvider(state.apiProvider),
+      normalizeWorkerMode(state.workerMode),
+      state.workerMode === "custom" ? state.workerUrl : HOSTED_WORKER_URL,
       mode || "grammar",
       state.language || "en",
       normalizeCacheText(text)
@@ -1087,8 +1110,8 @@
       return "Extension was updated. Refresh this page, then try again.";
     }
 
-    if (/api key|401|403|unauthorized|invalid api/i.test(message)) {
-      return "Setup needed: open the extension popup and update your API key.";
+    if (/access token|api key|401|403|unauthorized|invalid api/i.test(message)) {
+      return "Setup needed: open the extension popup and update your Worker access token.";
     }
 
     if (/disabled in the extension settings/i.test(message)) {

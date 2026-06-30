@@ -1,11 +1,13 @@
 {
   "name": "grammar-assistant-extension",
-  "version": "0.3.10",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "scripts": {
     "package": "node scripts/package-extension.mjs",
     "zip": "node scripts/package-extension.mjs",
-    "check": "node --check background.js && node --check popup.js && node --check content.js"
+    "landing:dev": "npm --prefix landing run dev",
+    "landing:build": "npm --prefix landing run build",
+    "check": "node --check background.js && node --check popup.js && node --check content.js && node --check cloudflare-worker/src/worker.js && node --check cloudflare-worker/scripts/hash-admin-password.mjs"
   }
 }

@@ -1,0 +1,3 @@
+:HL["/_next/static/chunks/16nx81xvfbj9z.css","style"]
+:HL["/assets/logo-48.png","image"]
+0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}},"staleTime":300,"buildId":"Dev3OL1hbWHKRl3-kD4ga"}

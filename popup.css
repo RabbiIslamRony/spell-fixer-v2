@@ -320,7 +320,7 @@ button {
   margin-top: 0;
 }
 
-.external-only[hidden] {
+.custom-only[hidden] {
   display: none;
 }
 

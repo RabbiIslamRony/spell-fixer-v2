@@ -4,30 +4,41 @@ This guide is for users installing the packaged Chrome extension.
 
 ## Install From ZIP
 
-1. Unzip `grammar-assistant-extension-v0.3.10.zip`.
+1. Unzip `grammar-assistant-extension-v0.4.0.zip`.
 2. Open Chrome and go to `chrome://extensions`.
 3. Turn on `Developer mode`.
 4. Click `Load unpacked`.
 5. Select the unzipped extension folder.
 
-## Add API Key
+## Connect Worker
+
+For normal hosted use:
 
 1. Click the extension icon in Chrome.
 2. Click `Setup`, or open `Advanced`.
-3. Choose `AI provider`.
-4. Paste the matching API key into `API key`.
+3. Keep `Worker mode` set to `Hosted Worker`.
+4. Paste the Worker access token you received from the admin.
 5. Click `Save settings`.
 6. Click `Test`.
 
-Use:
+For self-hosted use:
 
-- `Qwen` for a DashScope Qwen API key.
-- `Gemini` for a Gemini API key.
-- `External API` only if you have a custom grammar API URL.
+1. Deploy your own Cloudflare Worker.
+2. Set your Worker access secret, such as `GRAMMAR_API_KEY`.
+3. Add your AI provider key from the Worker `/admin` dashboard, or set `AI_API_KEY` as a Cloudflare secret.
+4. In the extension popup, open `Advanced`.
+5. Change `Worker mode` to `Custom Worker`.
+6. Paste your full `/grammar/check` URL.
+7. Paste the same token you saved as `GRAMMAR_API_KEY`.
+8. Click `Save settings`, then `Test`.
 
-For normal Qwen/Gemini use, leave `External API URL` blank. It is only needed when `External API` is selected.
+AI provider keys are not stored in Chrome. They stay encrypted in the Worker admin settings or in Cloudflare Worker secrets.
+The Worker admin page requires an AI provider key before saving provider settings.
 
-API keys are saved only in Chrome local extension storage on this device. They are not saved with Chrome sync.
+Recommended provider models:
+
+- Gemini: `gemini-2.5-flash`
+- Qwen / DashScope: `qwen-plus`
 
 ## Use The Extension
 
@@ -48,11 +59,12 @@ Add one domain per line in `Site list`.
 
 ## Troubleshooting
 
-- `Setup needed`: no API key is saved yet.
-- `Add your Qwen API key`: choose Qwen and paste a valid DashScope key.
-- `Qwen API key is invalid`: the key is wrong or belongs to another DashScope region.
+- `Setup needed`: no Worker access token is saved yet.
+- `Add your Worker access token`: paste a valid hosted or self-hosted Worker token.
+- `Worker access token is invalid, expired, or revoked`: ask the admin for a new token, or update your self-hosted `GRAMMAR_API_KEY`.
+- `Daily usage limit reached`: your token quota is used up.
 - `Suggestions are disabled for this site`: the current domain is blocked or not in the allowlist.
-- No `GA` badge: click inside a text box, type text, then pause briefly.
+- No assistant badge: click inside a text box, type text, then pause briefly.
 - No red underline: click `Test` in the popup and reload the extension from `chrome://extensions`.
 
-Do not share real API keys in screenshots, chats, GitHub, or documentation.
+Do not share real Worker tokens or AI provider keys in screenshots, chats, GitHub, or documentation.
